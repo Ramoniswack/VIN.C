@@ -89,8 +89,8 @@ export const Hero = () => {
             theme === 'dark' ? 'text-mink' : 'text-gray-200'
           }`}
         >
-          VIN.C crafts limited-run garments for the discerning minimalist. 
-          Designed with restraint, cut with precision, finished by hand.
+          VIN.C crafts limited-run Nepalese garments for the discerning minimalist. 
+          Designed with restraint, cut with precision, finished by skilled artisans.
         </p>
 
         <div ref={buttonRef}>
