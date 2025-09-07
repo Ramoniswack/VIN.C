@@ -59,7 +59,7 @@ export const Hero = () => {
       <div className="absolute inset-0 z-0">
         <img 
           src={heroImage}
-          alt="VIN.C Atelier Fashion"
+          alt="VIN.C Premium Fashion"
           className="w-full h-full object-cover object-center"
         />
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
