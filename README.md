@@ -16,7 +16,7 @@
 
 ## Overview
 
-VIN.C is a premium clothing brand based and manufactured in Nepal. This modern, responsive web application showcases our exquisite collection of contemporary garments crafted with traditional Nepalese expertise. The website features clean design with sections for browsing our shop, exploring lookbooks, learning about our brand, and an admin dashboard for product management.
+VIN.C is a premium clothing brand based and manufactured in Nepal. This modern, responsive web application showcases our exquisite collection of contemporary garments crafted with traditional Nepalese expertise and artisanal techniques. The website features clean design with sections for browsing our shop, exploring lookbooks, learning about our brand, and an admin dashboard for product management.
 
 ## Key Features
 
