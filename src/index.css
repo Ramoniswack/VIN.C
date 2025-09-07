@@ -1,96 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* VIN.C Design System - Luxe Fashion Aesthetic */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* VIN.C Brand Colors - Light Mode */
+    --bg: 222 30% 6%;           /* #0F0F10 - near-black matte */
+    --paper: 45 25% 89%;        /* #E7E3DC - ecru */
+    --ink: 0 0% 6%;             /* #101010 - true black for text on ecru */
+    --mink: 28 14% 68%;         /* #C2B8A3 - muted taupe-mink */
+    --graphite: 36 9% 39%;      /* #6F6A5A - warm gray */
+    --accent: 45 81% 51%;       /* #D4AF37 - brass gold */
+    
+    /* Semantic tokens */
+    --background: var(--bg);
+    --foreground: var(--paper);
+    --card: var(--bg);
+    --card-foreground: var(--paper);
+    --popover: var(--bg);
+    --popover-foreground: var(--paper);
+    --primary: var(--paper);
+    --primary-foreground: var(--ink);
+    --secondary: var(--mink);
+    --secondary-foreground: var(--ink);
+    --muted: var(--graphite);
+    --muted-foreground: var(--mink);
+    --accent-color: var(--accent);
+    --accent-foreground: var(--ink);
+    --destructive: 0 84% 60%;
+    --destructive-foreground: var(--paper);
+    --border: var(--graphite);
+    --input: var(--graphite);
+    --ring: var(--accent);
+    --radius: 0.75rem;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Animation variables */
+    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Typography scale */
+    --font-display: 'Bodoni Moda', serif;
+    --font-body: 'Inter', sans-serif;
+  }
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+  .light {
+    /* VIN.C Brand Colors - Light Mode Override */
+    --bg: 45 25% 94%;           /* #F5F3EE - warm white */
+    --paper: 222 30% 8%;        /* #131315 - near-black */
+    --ink: 45 25% 89%;          /* #E7E3DC - ecru for text on dark backgrounds */
+    --mink: 28 14% 45%;         /* #9A8F7A - darker taupe-mink */
+    --graphite: 36 9% 65%;      /* #B5AE9C - lighter warm gray */
+    --accent: 45 81% 51%;       /* #D4AF37 - brass gold (same) */
+    
+    /* Semantic tokens for light mode */
+    --background: var(--bg);
+    --foreground: var(--paper);
+    --card: var(--bg);
+    --card-foreground: var(--paper);
+    --popover: var(--bg);
+    --popover-foreground: var(--paper);
+    --primary: var(--paper);
+    --primary-foreground: var(--ink);
+    --secondary: 36 9% 85%;
+    --secondary-foreground: var(--paper);
+    --muted: 36 9% 85%;
+    --muted-foreground: var(--mink);
+    --accent-color: var(--accent);
+    --accent-foreground: var(--bg);
+    --destructive: 0 84% 60%;
+    --destructive-foreground: var(--bg);
+    --border: 36 9% 85%;
+    --input: 36 9% 85%;
+    --ring: var(--accent);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* VIN.C Brand Colors - Dark Mode (original) */
+    --bg: 222 30% 6%;           /* #0F0F10 - near-black matte */
+    --paper: 45 25% 89%;        /* #E7E3DC - ecru */
+    --ink: 0 0% 6%;             /* #101010 - true black for text on ecru */
+    --mink: 28 14% 68%;         /* #C2B8A3 - muted taupe-mink */
+    --graphite: 36 9% 39%;      /* #6F6A5A - warm gray */
+    --accent: 45 81% 51%;       /* #D4AF37 - brass gold */
+    
+    /* Semantic tokens for dark mode */
+    --background: var(--bg);
+    --foreground: var(--paper);
+    --card: var(--bg);
+    --card-foreground: var(--paper);
+    --popover: var(--bg);
+    --popover-foreground: var(--paper);
+    --primary: var(--paper);
+    --primary-foreground: var(--ink);
+    --secondary: var(--mink);
+    --secondary-foreground: var(--ink);
+    --muted: var(--graphite);
+    --muted-foreground: var(--mink);
+    --accent-color: var(--accent);
+    --accent-foreground: var(--ink);
+    --destructive: 0 84% 60%;
+    --destructive-foreground: var(--paper);
+    --border: var(--graphite);
+    --input: var(--graphite);
+    --ring: var(--accent);
   }
 }
 
@@ -99,7 +115,194 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    @apply antialiased scroll-smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-body;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Display typography */
+  .font-display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.025em;
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  /* Hero underline animation */
+  .hero-underline {
+    @apply relative;
+  }
+  
+  .hero-underline::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-px bg-accent-color;
+    width: 0;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .hero-underline.animate-underline::after {
+    width: 100%;
+  }
+
+  /* Marquee styles */
+  .marquee {
+    @apply flex whitespace-nowrap;
+    animation: marquee 30s linear infinite;
+  }
+  
+  .marquee:hover {
+    animation-play-state: paused;
+  }
+
+  /* Custom animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .animate-scaleIn {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  .animate-slideInRight {
+    animation: slideInRight 0.4s ease-out forwards;
+  }
+
+  .animate-slideInLeft {
+    animation: slideInLeft 0.4s ease-out forwards;
+  }
+
+  /* Card hover effects */
+  .card-hover {
+    transition: var(--transition-smooth);
+  }
+  
+  .card-hover:hover {
+    transform: scale(1.02) translateY(-2px);
+    box-shadow: 0 20px 40px -10px hsl(var(--accent) / 0.1);
+  }
+  
+  /* Form focus effects */
+  .focus-ring {
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.4), 0 0 0 4px rgba(212, 175, 55, 0.1);
+  }
+  
+  /* Admin form styling */
+  .admin-section {
+    background-color: rgba(194, 184, 163, 0.05);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    border: 1px solid rgba(111, 106, 90, 0.1);
+    transition: all 0.2s ease;
+  }
+  
+  .admin-section:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+    background-color: rgba(194, 184, 163, 0.1);
+  }
+  
+  .admin-section-title {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(111, 106, 90, 0.1);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .admin-number-badge {
+    background-color: rgba(212, 175, 55, 0.2);
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+    margin-right: 0.5rem;
+    color: rgb(212, 175, 55);
+  }
+
+  /* Smooth scrolling for reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .marquee {
+      animation-play-state: paused;
+    }
+    
+    .card-hover:hover {
+      transform: none;
+    }
+    
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
