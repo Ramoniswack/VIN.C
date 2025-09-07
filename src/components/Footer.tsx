@@ -13,8 +13,8 @@ export const Footer = () => {
               VIN.C
             </h3>
             <p className="font-body text-mink leading-relaxed mb-6">
-              Crafting quiet luxury through meticulous attention to detail and 
-              timeless design principles.
+              Crafting Nepalese quiet luxury through meticulous attention to detail and 
+              authentic artisanal craftsmanship.
             </p>
             <div className="flex space-x-4">
               <Button
