@@ -48,8 +48,8 @@ export const Navigation = () => {
     { label: 'Shop', href: '/shop' },
     { label: 'Collections', href: '/collections' },
     { label: 'Lookbook', href: '/lookbook' },
-    { label: 'Journal', href: '/journal' },
-    { label: 'About', href: '/about' }
+    { label: 'About', href: '/about' },
+    { label: 'Contact', href: '/contact' }
   ];
 
   return (
