@@ -8,7 +8,9 @@ import Index from "./pages/Index";
 import Shop from "./pages/Shop";
 import ProductDetail from "./pages/ProductDetail";
 import Lookbook from "./pages/Lookbook";
+import Collections from "./pages/Collections";
 import About from "./pages/About";
+import Contact from "./pages/Contact";
 import Cart from "./pages/Cart";
 import AdminLogin from "./pages/AdminLogin";
 import Admin from "./pages/Admin";
@@ -31,7 +33,9 @@ const App = () => (
             <Route path="/shop" element={<Shop />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/lookbook" element={<Lookbook />} />
+            <Route path="/collections" element={<Collections />} />
             <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin" element={<Admin />} />

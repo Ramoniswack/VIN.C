@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 const lookbookStories = [
   {
@@ -10,12 +13,12 @@ const lookbookStories = [
     title: "Quiet Luxury",
     subtitle: "Autumn/Winter 2024",
     description: "An exploration of understated elegance through carefully curated silhouettes and premium materials.",
-    coverImage: "/api/placeholder/800/1000",
+    coverImage: "/Products/ZenkageJack.jpg",
     images: [
-      { url: "/api/placeholder/800/1000", caption: "Essential wool blazer in charcoal" },
-      { url: "/api/placeholder/800/1000", caption: "Silk charmeuse shirt with tailored trousers" },
-      { url: "/api/placeholder/800/1000", caption: "Cashmere overcoat in camel" },
-      { url: "/api/placeholder/800/1000", caption: "Complete look with leather accessories" }
+      { url: "/Products/ZenkageJack.jpg", caption: "Zenkage Jacket in premium fabric" },
+      { url: "/Products/ZenkageJack2.jpg", caption: "Detailed craftsmanship and fit" },
+      { url: "/Products/ZenkageJack3.jpg", caption: "Complete look with refined details" },
+      { url: "/Products/WhiteJack.jpg", caption: "Essential white jacket for versatility" }
     ]
   },
   {
@@ -23,12 +26,12 @@ const lookbookStories = [
     title: "Modern Minimalism",
     subtitle: "Spring/Summer 2024",
     description: "Clean lines and refined details define this collection of contemporary essentials.",
-    coverImage: "/api/placeholder/800/1000",
+    coverImage: "/Products/MoccaShirt.jpg",
     images: [
-      { url: "/api/placeholder/800/1000", caption: "Linen blazer in natural tones" },
-      { url: "/api/placeholder/800/1000", caption: "Cotton shirting with modern cut" },
-      { url: "/api/placeholder/800/1000", caption: "Lightweight wool suiting" },
-      { url: "/api/placeholder/800/1000", caption: "Seasonal accessories in leather" }
+      { url: "/Products/MoccaShirt.jpg", caption: "Mocca shirt in natural tones" },
+      { url: "/Products/MoccaShirt2.jpg", caption: "Modern cut with traditional techniques" },
+      { url: "/Products/RegalChinos.jpg", caption: "Regal chinos for everyday elegance" },
+      { url: "/Products/RegalChinos2.jpg", caption: "Perfect fit and comfort" }
     ]
   },
   {
@@ -36,17 +39,54 @@ const lookbookStories = [
     title: "Urban Sophistication",
     subtitle: "Resort 2024",
     description: "Versatile pieces that transition seamlessly from city to destination.",
-    coverImage: "/api/placeholder/800/1000",
+    coverImage: "/Products/CamoJack.jpg",
     images: [
-      { url: "/api/placeholder/800/1000", caption: "Unstructured blazer in navy" },
-      { url: "/api/placeholder/800/1000", caption: "Travel-friendly shirting" },
-      { url: "/api/placeholder/800/1000", caption: "Lightweight outerwear" },
-      { url: "/api/placeholder/800/1000", caption: "Complete travel wardrobe" }
+      { url: "/Products/CamoJack.jpg", caption: "Camo jacket for urban exploration" },
+      { url: "/Products/CamoJack2.jpg", caption: "Multi-functional design" },
+      { url: "/Products/CamoJack3.jpg", caption: "Travel-ready sophistication" },
+      { url: "/Products/Noragi.jpg", caption: "Noragi style for contemporary wear" }
     ]
   }
 ];
 
 export default function Lookbook() {
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Header animation
+    gsap.fromTo('.lookbook-title', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' });
+    gsap.fromTo('.lookbook-desc', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', delay: 0.15 });
+
+    // Story cards staggered animation
+    gsap.fromTo('.lookbook-card', { opacity: 0, y: 20 }, {
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      ease: 'power3.out',
+      stagger: 0.12,
+      scrollTrigger: {
+        trigger: '.lookbook-card',
+        start: 'top 85%',
+        toggleActions: 'play none none reverse'
+      }
+    });
+
+    // Featured editorial animation
+    gsap.fromTo('.featured-editorial', { opacity: 0, y: 30 }, {
+      opacity: 1,
+      y: 0,
+      duration: 0.9,
+      ease: 'power3.out',
+      scrollTrigger: {
+        trigger: '.featured-editorial',
+        start: 'top 85%',
+        toggleActions: 'play none none reverse'
+      }
+    });
+
+    return () => ScrollTrigger.getAll().forEach(t => t.kill());
+  }, []);
+
   const [selectedStory, setSelectedStory] = useState<number | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
@@ -84,8 +124,8 @@ export default function Lookbook() {
         {/* Header */}
         <div className="container mx-auto px-4 mb-12">
           <div className="max-w-2xl">
-            <h1 className="text-5xl font-display font-medium text-paper mb-4">Lookbook</h1>
-            <p className="text-xl text-graphite leading-relaxed">
+            <h1 className="text-5xl font-display font-medium text-paper mb-4 lookbook-title">Lookbook</h1>
+            <p className="text-xl text-graphite leading-relaxed lookbook-desc">
               Visual narratives that capture the essence of each collection through 
               carefully curated styling and editorial photography.
             </p>
@@ -98,7 +138,7 @@ export default function Lookbook() {
             {lookbookStories.map((story, index) => (
               <div
                 key={story.id}
-                className="group cursor-pointer"
+                className="group cursor-pointer lookbook-card"
                 onClick={() => openStory(story.id)}
               >
                 <div className="aspect-[4/5] overflow-hidden bg-mink/10 mb-4">
@@ -125,7 +165,7 @@ export default function Lookbook() {
         </div>
 
         {/* Featured Editorial */}
-        <section className="bg-paper py-16">
+        <section className="bg-paper py-16 featured-editorial">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div className="space-y-6">
@@ -137,14 +177,14 @@ export default function Lookbook() {
                   and thoughtful design. From initial sketch to final fitting, we document 
                   the journey of creating garments that stand the test of time.
                 </p>
-                <Button variant="outline" className="border-ink text-ink hover:bg-ink hover:text-paper">
-                  Explore Our Process
+                <Button className="bg-accent hover:bg-accent/90 text-paper hero-button" asChild>
+                  <Link to="/about" className="px-3 py-2 block">Explore Our Process</Link>
                 </Button>
               </div>
               <div className="aspect-[4/3] overflow-hidden bg-mink">
                 <img
-                  src="/api/placeholder/600/450"
-                  alt="Atelier workspace"
+                  src="/Products/MoccaCombo.png"
+                  alt="VIN.C Kathmandu atelier workspace"
                   className="w-full h-full object-cover"
                 />
               </div>
