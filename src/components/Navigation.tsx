@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Search, ShoppingBag, Menu, X, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
+import { useProductStore } from '@/store/productStore';
 
 export const Navigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const cartItemsCount = useCartStore(state => state.getTotalItems());
+  const { products } = useProductStore();
   
   // Check if we're on the home page (where hero image is)
   const isOnHomePage = location.pathname === '/';
@@ -34,6 +41,21 @@ export const Navigation = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  // Search functionality
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
+      setIsSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  ).slice(0, 5); // Limit to 5 results
 
   useEffect(() => {
     // Animate navigation on mount
@@ -92,13 +114,16 @@ export const Navigation = () => {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Open search"
+              title="Search"
               className={`hover:bg-transparent transition-colors duration-300 ${
                 isOverHero 
                   ? 'text-gray-200 hover:text-white' 
                   : 'text-mink hover:text-paper'
               }`}
+              onClick={() => setIsSearchOpen(true)}
             >
-              <Search className="h-5 w-5" />
+              <Search className="h-5 w-5" aria-hidden="true" />
             </Button>
             <Link
               to="/cart"
@@ -185,6 +210,68 @@ export const Navigation = () => {
           </div>
         )}
       </div>
+
+      {/* Search Modal */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Search Products</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSearch} className="space-y-4" role="search" aria-label="Search products">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-mink h-4 w-4" aria-hidden="true" />
+              <Input
+                type="text"
+                placeholder="Search for products..."
+                name="q"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                autoFocus
+              />
+            </div>
+            {searchQuery && filteredProducts.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center space-x-3 p-2 hover:bg-mink/10 rounded cursor-pointer"
+                    onClick={() => {
+                      navigate(`/product/${product.id}`);
+                      setIsSearchOpen(false);
+                      setSearchQuery('');
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <img
+                      src={product.images?.[0] || '/Products/placeholder.jpg'}
+                      alt={product.name}
+                      className="w-10 h-10 object-cover rounded"
+                    />
+                    <div>
+                      <p className="font-medium text-paper">{product.name}</p>
+                      <p className="text-sm text-mink">${product.price}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSearchOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!searchQuery.trim()}>
+                Search
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </nav>
   );
 };
