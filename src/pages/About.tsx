@@ -1,11 +1,15 @@
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { Link } from "react-router-dom";
 
 const values = [
   {
     title: "Craftsmanship",
-    description: "Every garment is constructed with traditional techniques passed down through generations of Italian artisans.",
+    description: "Every garment is constructed with traditional techniques passed down through generations of Nepalese artisans.",
     icon: "craft"
   },
   {
@@ -29,22 +33,22 @@ const timeline = [
   {
     year: "2018",
     title: "Foundation",
-    description: "VIN.C was founded with a vision to create contemporary luxury garments that honor traditional craftsmanship."
+    description: "VIN.C was founded with a vision to create contemporary luxury garments that honor traditional Nepalese craftsmanship."
   },
   {
     year: "2019",
     title: "Atelier Partnership",
-    description: "Established partnerships with family-owned ateliers in Northern Italy, known for their expertise in tailoring."
+    description: "Established partnerships with skilled artisans in Kathmandu, known for their expertise in traditional tailoring techniques."
   },
   {
     year: "2021",
     title: "Sustainable Initiative",
-    description: "Launched our sustainability program, ensuring all materials are sourced responsibly and ethically."
+    description: "Launched our sustainability program, ensuring all materials are sourced responsibly and ethically from local suppliers."
   },
   {
     year: "2023",
     title: "Global Recognition",
-    description: "Received international acclaim for our approach to modern luxury and sustainable fashion practices."
+    description: "Received international acclaim for our approach to modern luxury and sustainable fashion practices rooted in Nepalese heritage."
   },
   {
     year: "2024",
@@ -79,6 +83,193 @@ const getIconSvg = (iconType: string) => {
 };
 
 export default function About() {
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Hero section animation
+    gsap.fromTo(".hero-title", 
+      { opacity: 0, y: 50 },
+      { opacity: 1, y: 0, duration: 1, ease: "power3.out", delay: 0.2 }
+    );
+
+    gsap.fromTo(".hero-description", 
+      { opacity: 0, y: 30 },
+      { opacity: 1, y: 0, duration: 1, ease: "power3.out", delay: 0.4 }
+    );
+
+    gsap.fromTo(".hero-button", 
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.8, ease: "power3.out", delay: 0.6 }
+    );
+
+    gsap.fromTo(".hero-image", 
+      { opacity: 0, scale: 1.1 },
+      { opacity: 1, scale: 1, duration: 1.2, ease: "power3.out", delay: 0.3 }
+    );
+
+    // Values section animation
+    gsap.fromTo(".values-title", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".values-title",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    gsap.fromTo(".values-description", 
+      { opacity: 0, y: 20 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        delay: 0.2,
+        scrollTrigger: {
+          trigger: ".values-description",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    gsap.fromTo(".value-item", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        stagger: 0.1,
+        scrollTrigger: {
+          trigger: ".value-item",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    // Craftsmanship section animation
+    gsap.fromTo(".craftsmanship-content", 
+      { opacity: 0, x: -50 },
+      { 
+        opacity: 1, 
+        x: 0, 
+        duration: 1, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".craftsmanship-content",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    gsap.fromTo(".craftsmanship-image", 
+      { opacity: 0, x: 50 },
+      { 
+        opacity: 1, 
+        x: 0, 
+        duration: 1, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".craftsmanship-image",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    // Timeline animation
+    gsap.fromTo(".timeline-title", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".timeline-title",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    gsap.fromTo(".timeline-item", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        stagger: 0.2,
+        scrollTrigger: {
+          trigger: ".timeline-item",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    // Sustainability section animation
+    gsap.fromTo(".sustainability-title", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".sustainability-title",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    gsap.fromTo(".sustainability-item", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        stagger: 0.1,
+        scrollTrigger: {
+          trigger: ".sustainability-item",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    // Contact CTA animation
+    gsap.fromTo(".contact-cta", 
+      { opacity: 0, y: 30 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        duration: 0.8, 
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: ".contact-cta",
+          start: "top 80%",
+          toggleActions: "play none none reverse"
+        }
+      }
+    );
+
+    return () => {
+      ScrollTrigger.getAll().forEach(trigger => trigger.kill());
+    };
+  }, []);
   return (
     <div className="min-h-screen bg-bg">
       <Navigation />
@@ -92,17 +283,17 @@ export default function About() {
                 Where tradition meets innovation
               </h1>
               <p className="text-xl text-graphite leading-relaxed">
-                VIN.C represents the confluence of time-honored craftsmanship and contemporary design philosophy. 
+                VIN.C represents the confluence of time-honored Nepalese craftsmanship and contemporary design philosophy. 
                 We create garments that speak to the modern individual who values quality, sustainability, and enduring style.
               </p>
-              <Button className="mt-8">
-                Discover Our Process
+              <Button className="mt-8 bg-accent hover:bg-accent/90 text-paper" asChild>
+                <Link to="/collections" className="px-3 py-2 block">Discover Our Process</Link>
               </Button>
             </div>
             <div className="aspect-[4/3] overflow-hidden bg-mink/10">
               <img
-                src="/api/placeholder/600/450"
-                alt="VIN.C atelier workspace"
+                src="/Products/MoccaCombo2.png"
+                alt="VIN.C Kathmandu atelier workspace"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -138,8 +329,8 @@ export default function About() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="aspect-[4/3] overflow-hidden bg-mink/10">
               <img
-                src="/api/placeholder/600/450"
-                alt="Artisan at work"
+                src="/Products/RegalCombo.jpeg"
+                alt="Nepalese artisan at work"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -148,7 +339,7 @@ export default function About() {
                 Artisanal Excellence
               </h2>
               <p className="text-lg text-graphite leading-relaxed">
-                Our partnership with master tailors in Northern Italy ensures that each garment receives 
+                Our partnership with master tailors in Kathmandu ensures that each garment receives 
                 the attention to detail that only comes from decades of experience. From pattern making 
                 to final pressing, every step is executed with precision and care.
               </p>
@@ -262,8 +453,8 @@ export default function About() {
               Have questions about our process, sustainability practices, or custom tailoring services? 
               We'd love to hear from you.
             </p>
-            <Button variant="outline" className="border-ink text-ink hover:bg-ink hover:text-paper">
-              Contact Us
+            <Button variant="outline" className="border-accent text-accent hover:bg-accent hover:text-paper" asChild>
+              <Link to="/contact">Contact Us</Link>
             </Button>
           </div>
         </section>
