@@ -195,7 +195,7 @@ The admin interface is fully responsive:
 
 To add new products:
 
-1. Log in to the admin panel at `/admin-login`
+1. Log in to the admin panel at `/auth`
 2. Navigate to Products and click "Add Product"
 3. Fill in the product details and upload images
 4. Save to publish the product to the shop

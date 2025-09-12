@@ -28,7 +28,7 @@ export default function Admin() {
   // Check authentication
   useEffect(() => {
     if (!isAuthenticated || !user?.isAdmin) {
-      navigate("/admin-login");
+      navigate("/auth");
     }
   }, [isAuthenticated, user, navigate]);
   

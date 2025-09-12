@@ -13,40 +13,42 @@ export const Hero = () => {
   const { theme } = useTheme();
 
   useEffect(() => {
+    // Respect reduced motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // Immediately set final state without animating
+      if (titleRef.current) titleRef.current.style.opacity = '1';
+      if (subtitleRef.current) subtitleRef.current.style.opacity = '1';
+      if (underlineRef.current) underlineRef.current.style.transform = 'scaleX(1)';
+      return;
+    }
+
     const ctx = gsap.context(() => {
-      // Set initial states
-      gsap.set([titleRef.current, subtitleRef.current, buttonRef.current], {
+      // Set initial states (title and subtitle only)
+      gsap.set([titleRef.current, subtitleRef.current], {
         opacity: 0,
         y: 40
       });
 
-      // Create timeline
-      const tl = gsap.timeline({ delay: 0.5 });
-      
+      // Create timeline for lightweight entrance (no button animation)
+      const tl = gsap.timeline({ delay: 0.4 });
       tl.to(titleRef.current, {
         opacity: 1,
         y: 0,
-        duration: 0.8,
-        ease: "power3.out"
+        duration: 0.7,
+        ease: 'power3.out'
       })
       .to(subtitleRef.current, {
         opacity: 1,
         y: 0,
         duration: 0.6,
-        ease: "power3.out"
-      }, "-=0.4")
-      .to(buttonRef.current, {
-        opacity: 1,
-        y: 0,
-        duration: 0.6,
-        ease: "power3.out"
-      }, "-=0.3")
+        ease: 'power3.out'
+      }, '-=0.35')
       .to(underlineRef.current, {
         scaleX: 1,
-        duration: 0.8,
-        ease: "power3.out",
-        transformOrigin: "left"
-      }, "-=0.6");
+        duration: 0.7,
+        ease: 'power3.out',
+        transformOrigin: 'left'
+      }, '-=0.5');
 
     }, heroRef);
 
@@ -62,7 +64,7 @@ export const Hero = () => {
           alt="VIN.C Premium Fashion"
           className="w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+  <div className="absolute inset-0 bg-black/46" />
       </div>
 
       {/* Content */}
@@ -93,18 +95,7 @@ export const Hero = () => {
           Designed with restraint, cut with precision, finished by skilled artisans.
         </p>
 
-        <div ref={buttonRef}>
-          <Button 
-            size="lg" 
-            className={`font-medium px-8 py-6 text-lg tracking-body transition-all duration-300 hover:scale-105 ${
-              theme === 'dark' 
-                ? 'bg-paper text-ink hover:bg-paper/90' 
-                : 'bg-white text-black hover:bg-gray-100'
-            }`}
-          >
-            Shop the Drop
-          </Button>
-        </div>
+        {/* CTA removed to keep hero minimal and performant */}
       </div>
     </section>
   );
