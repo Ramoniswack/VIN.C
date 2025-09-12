@@ -202,7 +202,10 @@ export default function Shop() {
           <img
             src={product.image.startsWith('/') ? product.image : `/${product.image}`}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
           />
           {!product.inStock && (
             <div className="absolute inset-0 bg-graphite/50 flex items-center justify-center">
@@ -311,18 +314,18 @@ export default function Shop() {
           {/* Search & Sort */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 mt-6 lg:mt-0">
             <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-graphite" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-graphite dark:text-paper" />
               <Input
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-full sm:w-64 bg-transparent border-graphite/30 focus:border-accent/50 transition-colors"
+                className="pl-10 w-full sm:w-64 bg-transparent border-graphite/30 dark:border-graphite/30 text-graphite dark:text-paper focus:border-accent/50 transition-colors"
               />
             </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 bg-transparent border border-graphite/30 rounded-md text-paper text-sm focus:border-accent/50 focus:outline-none transition-colors min-w-[180px]"
+              className="px-4 py-2 bg-transparent border border-graphite/30 dark:border-graphite/30 rounded-md text-graphite dark:text-paper text-sm focus:border-accent/50 focus:outline-none transition-colors min-w-[180px]"
             >
               <option value="featured">Featured</option>
               <option value="price-low">Price: Low to High</option>

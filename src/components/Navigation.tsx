@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { gsap } from 'gsap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Search, ShoppingBag, Menu, X, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -14,27 +12,49 @@ export const Navigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const cartItemsCount = useCartStore(state => state.getTotalItems());
   const { products } = useProductStore();
-  
-  // Check if we're on the home page (where hero image is)
+
   const isOnHomePage = location.pathname === '/';
   const isOverHero = isOnHomePage && !isScrolled;
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
+  // compute nav background + border classes once so we can reuse for mega-menu
+  const navBgOnly = isScrolled ? 'bg-bg/95' : (isOverHero ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent');
+  const navBorder = isScrolled ? 'border-b border-graphite/20' : (isOverHero ? 'border-b border-black/10' : '');
+  const navTopBorder = isScrolled ? 'border-t border-graphite/20' : (isOverHero ? 'border-t border-black/10' : 'border-t border-graphite/10');
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+  useEffect(() => {
+    let ticking = false;
+    const handle = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setIsScrolled(window.scrollY > 60);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener('scroll', handle, { passive: true });
+    return () => window.removeEventListener('scroll', handle);
   }, []);
-  
-  // Function to scroll to top when clicking on the same link
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleNavLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (location.pathname === href) {
       e.preventDefault();
@@ -42,7 +62,6 @@ export const Navigation = () => {
     }
   };
 
-  // Search functionality
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -52,226 +71,162 @@ export const Navigation = () => {
     }
   };
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 5); // Limit to 5 results
+  // Escape handlers
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        setIsShopOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
-    // Animate navigation on mount
-    gsap.fromTo('nav', 
-      { opacity: 0, y: -20 },
-      { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", delay: 0.2 }
-    );
-  }, []);
+    if (isSearchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 60);
+    }
+  }, [isSearchOpen]);
 
   const navItems = [
     { label: 'Home', href: '/' },
     { label: 'Shop', href: '/shop' },
-    { label: 'Collections', href: '/collections' },
-    { label: 'Lookbook', href: '/lookbook' },
-    { label: 'About', href: '/about' },
-    { label: 'Contact', href: '/contact' }
+    { label: 'New', href: '/new' },
+    { label: 'About', href: '/about' }
   ];
 
-  return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-      isScrolled ? 'bg-bg/90 backdrop-blur-md border-b border-graphite/30' : 'bg-transparent'
-    }`}>
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center">
-            <Link to="/" className={`font-display text-2xl font-medium tracking-tight transition-colors duration-300 ${
-              isOverHero ? 'text-white' : 'text-paper'
-            }`}>
-              VIN.C
-            </Link>
-          </div>
+  const categories = Array.from(new Set(products.map(p => p.category)));
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+  return (
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300 ${navBgOnly} ${navBorder}`}>
+      <div className="w-full px-2 py-2">
+        <div className="w-full grid grid-cols-3 items-center">
+
+          {/* Left area - on mobile show toggle + hamburger */}
+          <div className="flex items-center space-x-2 justify-start col-start-1 pl-2">
+            <div className="md:hidden flex items-center space-x-2">
+              <ThemeToggle className={`${isOverHero ? 'text-white' : 'text-mink'}`} />
+              <Button variant="ghost" size="icon" className={`hover:bg-transparent transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
+            </div>
+
+            <div className="hidden md:flex items-center space-x-6 justify-start">
             {navItems.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href}
-                className={`font-body relative group transition-colors duration-300 ${
-                  isOverHero 
-                    ? 'text-gray-200 hover:text-white' 
-                    : 'text-mink hover:text-paper'
-                }`}
-                onClick={(e) => handleNavLinkClick(e, item.href)}
-              >
-                {item.label}
-                <span className="absolute bottom-0 left-0 w-0 h-px bg-accent-color transition-all duration-300 group-hover:w-full" />
-              </Link>
+              item.label === 'Shop' ? (
+                <div
+                  key={item.label}
+                  className="relative"
+                  onMouseEnter={() => { if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = null; } setIsShopOpen(true); }}
+                  onMouseLeave={() => { if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current); closeTimerRef.current = window.setTimeout(() => { setIsShopOpen(false); closeTimerRef.current = null; }, 220); }}
+                  onFocus={() => { if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = null; } setIsShopOpen(true); }}
+                  onBlur={(e: React.FocusEvent) => { const related = e.relatedTarget as Node | null; if (!related || !e.currentTarget.contains(related)) { if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current); closeTimerRef.current = window.setTimeout(() => { setIsShopOpen(false); closeTimerRef.current = null; }, 220); } }}
+                >
+                  <Link to={item.href} className={`font-body text-base font-medium transition-colors duration-200 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, item.href)}>{item.label}</Link>
+
+                  {/* mega menu toggles handled globally; actual full-width panel is rendered below as a sibling to the nav grid */}
+                </div>
+              ) : (
+                <Link key={item.label} to={item.href} className={`font-body text-base font-medium transition-colors duration-200 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, item.href)}>{item.label}</Link>
+              )
             ))}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Open search"
-              title="Search"
-              className={`hover:bg-transparent transition-colors duration-300 ${
-                isOverHero 
-                  ? 'text-gray-200 hover:text-white' 
-                  : 'text-mink hover:text-paper'
-              }`}
-              onClick={() => setIsSearchOpen(true)}
-            >
+          </div>
+
+          <div className="col-start-2 justify-self-center">
+            <Link to="/" className={`font-display text-2xl font-medium tracking-tight transition-colors duration-300 ${isOverHero ? 'text-white' : 'text-paper'}`}>VIN.C</Link>
+          </div>
+
+          {/* Right area - search, shop, cart, user on all screens */}
+          <div className="flex items-center space-x-4 justify-end col-start-3 pr-2">
+            {/* Theme toggle visible on md+ only (mobile toggle remains on left) */}
+            <div className="hidden md:flex">
+              <ThemeToggle className={`${isOverHero ? 'text-white' : 'text-mink'}`} />
+            </div>
+
+            <Button variant="ghost" size="icon" aria-label="Open search" title="Search" className={`hover:bg-transparent transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={() => setIsSearchOpen(true)}>
               <Search className="h-5 w-5" aria-hidden="true" />
             </Button>
-            <Link
-              to="/cart"
-              className={`hover:bg-transparent relative p-2 transition-colors duration-300 ${
-                isOverHero 
-                  ? 'text-gray-200 hover:text-white' 
-                  : 'text-mink hover:text-paper'
-              }`}
-              onClick={(e) => handleNavLinkClick(e, '/cart')}
-            >
-              <ShoppingBag className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 bg-accent-color text-ink text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
-                {cartItemsCount}
-              </span>
+
+            <Link to="/shop" className="hidden lg:inline-block ml-2">
+              <Button size="sm" className={`px-4 py-2 font-medium tracking-tight transition-all duration-200 ${isOverHero ? 'bg-paper text-ink' : 'bg-accent-color text-ink'}`}>Shop</Button>
             </Link>
-            
-            {/* Admin Link */}
-            <Link
-              to={isAuthenticated ? "/admin" : "/admin-login"}
-              className={`hover:bg-transparent p-2 transition-colors duration-300 ${
-                isOverHero 
-                  ? 'text-gray-200 hover:text-white' 
-                  : 'text-mink hover:text-paper'
-              }`}
-              onClick={(e) => handleNavLinkClick(e, isAuthenticated ? "/admin" : "/admin-login")}
-            >
+
+            <Link to="/cart" className={`hover:bg-transparent relative p-2 transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, '/cart')}>
+              <ShoppingBag className="h-5 w-5" />
+              <span className="absolute -top-1 -right-1 bg-accent-color text-ink text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">{cartItemsCount}</span>
+            </Link>
+
+            <Link to={isAuthenticated ? "/admin" : "/auth"} className={`hover:bg-transparent p-2 transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, isAuthenticated ? "/admin" : "/auth")} aria-label={isAuthenticated ? 'Open admin dashboard' : 'Open account page'}>
               <User className="h-5 w-5" />
             </Link>
 
-            {/* Mobile Menu Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`md:hidden hover:bg-transparent transition-colors duration-300 ${
-                isOverHero 
-                  ? 'text-gray-200 hover:text-white' 
-                  : 'text-mink hover:text-paper'
-              }`}
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
+            {/* on mobile toggle/hamburger already in left area */}
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Full-width mega-menu anchored to the left edge of the screen */}
+        {isShopOpen && (
+          <div
+            className="absolute left-0 right-0 top-full z-40"
+            onMouseEnter={() => { if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = null; } setIsShopOpen(true); }}
+            onMouseLeave={() => { if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current); closeTimerRef.current = window.setTimeout(() => { setIsShopOpen(false); closeTimerRef.current = null; }, 220); }}
+          >
+            {/* mega-menu background matches navbar */}
+            <div className={`w-full ${navBgOnly} ${navTopBorder}`}>
+              {/* content starts from the left edge; no centered max-width so columns begin near the left */}
+              <div className="w-full px-4 md:px-6 lg:px-8 py-8">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5 md:gap-8 text-sm md:text-base lg:text-base">
+                  {categories.map((cat) => (
+                    <div key={cat} className="flex flex-col">
+                      <h6 className="text-sm md:text-base uppercase tracking-wide font-medium mb-2 text-black dark:text-white">{cat}</h6>
+                      <ul className="space-y-2">
+                        {products.filter(p => p.category === cat).slice(0,8).map(p => (
+                          <li key={p.id}><Link to={`/product/${p.id}`} className="text-sm md:text-base text-black/85 dark:text-gray-200 hover:underline font-normal">{p.name}</Link></li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isMobileMenuOpen && (
           <div className="md:hidden mt-6 pb-6 border-t border-graphite/30">
             <div className="flex flex-col space-y-4 mt-6">
               {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className={`font-body py-2 transition-colors duration-300 ${
-                    isOverHero 
-                      ? 'text-gray-200 hover:text-white' 
-                      : 'text-mink hover:text-paper'
-                  }`}
-                  onClick={(e) => {
-                    handleNavLinkClick(e, item.href);
-                    setIsMobileMenuOpen(false);
-                  }}
-                >
-                  {item.label}
-                </Link>
+                <Link key={item.label} to={item.href} className={`font-body py-2 transition-colors duration-300 ${isOverHero ? 'text-gray-200 hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => { handleNavLinkClick(e, item.href); setIsMobileMenuOpen(false); }}>{item.label}</Link>
               ))}
-              
-              {/* Admin Link for Mobile */}
-              <Link
-                to={isAuthenticated ? "/admin" : "/admin-login"}
-                className={`font-body py-2 transition-colors duration-300 ${
-                  isOverHero 
-                    ? 'text-gray-200 hover:text-white' 
-                    : 'text-mink hover:text-paper'
-                }`}
-                onClick={(e) => {
-                  handleNavLinkClick(e, isAuthenticated ? "/admin" : "/admin-login");
-                  setIsMobileMenuOpen(false);
-                }}
-              >
+
+              <Link to={isAuthenticated ? "/admin" : "/admin-login"} className={`font-body py-2 transition-colors duration-300 ${isOverHero ? 'text-gray-200 hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => { handleNavLinkClick(e, isAuthenticated ? "/admin" : "/admin-login"); setIsMobileMenuOpen(false); }}>
                 Admin {isAuthenticated ? "Dashboard" : "Login"}
               </Link>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Search Modal */}
-      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Search Products</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSearch} className="space-y-4" role="search" aria-label="Search products">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-mink h-4 w-4" aria-hidden="true" />
-              <Input
-                type="text"
-                placeholder="Search for products..."
-                name="q"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                autoFocus
-              />
-            </div>
-            {searchQuery && filteredProducts.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center space-x-3 p-2 hover:bg-mink/10 rounded cursor-pointer"
-                    onClick={() => {
-                      navigate(`/product/${product.id}`);
-                      setIsSearchOpen(false);
-                      setSearchQuery('');
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <img
-                      src={product.images?.[0] || '/Products/placeholder.jpg'}
-                      alt={product.name}
-                      className="w-10 h-10 object-cover rounded"
-                    />
-                    <div>
-                      <p className="font-medium text-paper">{product.name}</p>
-                      <p className="text-sm text-mink">${product.price}</p>
-                    </div>
-                  </div>
-                ))}
+        <div className={`fixed inset-0 z-40 transition-opacity duration-200 ${isSearchOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
+          <div ref={searchPanelRef} className={`absolute left-1/2 transform -translate-x-1/2 top-6 w-full max-w-4xl transition-transform duration-300 ${isSearchOpen ? 'translate-y-0' : '-translate-y-8'} z-50`}>
+            <div className="top-search-panel bg-popover/95 border-b border-graphite/10 rounded-xl overflow-hidden">
+              <div className="max-w-7xl mx-auto px-6 py-4">
+                <form onSubmit={handleSearch} className="flex items-center space-x-4" role="search" aria-label="Search products">
+                  <Search className="h-5 w-5 text-graphite" />
+                  <Input ref={searchInputRef} type="text" placeholder="Search Any Product" name="q" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="flex-1 bg-transparent border-none focus:ring-0" />
+                  <Button variant="ghost" size="icon" aria-label="Close search" onClick={() => setIsSearchOpen(false)}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </form>
               </div>
-            )}
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsSearchOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!searchQuery.trim()}>
-                Search
-              </Button>
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+
+      </div>
     </nav>
   );
 };

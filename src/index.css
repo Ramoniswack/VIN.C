@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -130,7 +130,7 @@
 
   /* Display typography */
   .font-display {
-    font-family: var(--font-display);
+    font-family: 'Playfair Display', var(--font-display);
     font-optical-sizing: auto;
     letter-spacing: -0.025em;
   }
@@ -242,6 +242,24 @@
   .card-hover:hover {
     transform: scale(1.02) translateY(-2px);
     box-shadow: 0 20px 40px -10px hsl(var(--accent) / 0.1);
+  }
+
+  /* Top search panel */
+  .top-search-panel {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    /* Prefer solid translucent background over blur for performance */
+    background-clip: padding-box;
+  }
+
+  /* Mega menu should use transform/opacity for smoothness */
+  .mega-menu {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
   
   /* Form focus effects */
