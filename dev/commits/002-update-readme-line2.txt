@@ -1,0 +1,1 @@
+chore: small note 2 - tidy docs
