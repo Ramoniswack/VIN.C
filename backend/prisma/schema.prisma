@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  title       String
+  slug        String   @unique
+  description String?
+  price       Int
+  images      String[] @default([])
+  category    String?
+  inStock     Boolean  @default(true)
+  wishlistItems WishlistItem[]
+  cartItems     CartItem[]
+  createdAt   DateTime @default(now())
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+// Users, wishlist and cart models
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  name       String?
+  supabaseId String?  @unique
+  preferences Json?   
+  createdAt  DateTime @default(now())
+  wishlist   WishlistItem[]
+  cart       CartItem[]
+  orders     Order[]
+}
+
+model WishlistItem {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int
+  createdAt DateTime @default(now())
+  @@unique([userId, productId])
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int
+  quantity  Int      @default(1)
+  variant   String?
+  createdAt DateTime @default(now())
+  @@unique([userId, productId, variant])
+}
+
+enum OrderStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+model Order {
+  id              Int        @id @default(autoincrement())
+  stripeSessionId String     @unique
+  user            User?      @relation(fields: [userId], references: [id])
+  userId          Int?
+  email           String?
+  currency        String
+  amountTotal     Int
+  status          OrderStatus @default(pending)
+  items           OrderItem[]
+  createdAt       DateTime   @default(now())
+}
+
+model OrderItem {
+  id        Int    @id @default(autoincrement())
+  order     Order  @relation(fields: [orderId], references: [id])
+  orderId   Int
+  productId Int?
+  name      String
+  unitAmount Int
+  quantity  Int
+}
+
+model WebhookEvent {
+  id        Int      @id @default(autoincrement())
+  eventId   String   @unique
+  type      String
+  payload   Json
+  receivedAt DateTime @default(now())
+}
+

@@ -7,6 +7,14 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      // forward API requests to backend server during local development
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   plugins: [
     react(),
