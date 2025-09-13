@@ -7,8 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog'
 import { Dashboard } from "@/components/admin/Dashboard";
 import { ProductManager } from "@/components/admin/ProductManager";
+import { UsersManager } from "@/components/admin/UsersManager";
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -16,6 +18,8 @@ export default function Admin() {
   const [searchParams] = useSearchParams();
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  
   
   // Get tab from URL or use default
   useEffect(() => {
@@ -88,7 +92,7 @@ export default function Admin() {
             <Button 
               variant="outline" 
               className="border-graphite/30"
-              onClick={() => useAuthStore.getState().logout()}
+              onClick={() => setConfirmOpen(true)}
             >
               Logout
             </Button>
@@ -132,11 +136,18 @@ export default function Admin() {
               >
                 Settings
               </TabsTrigger>
+              <TabsTrigger 
+                value="users" 
+                className="data-[state=active]:text-accent data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none"
+              >
+                Users
+              </TabsTrigger>
             </TabsList>
             
             <div className="mt-6">
               {activeTab === "dashboard" && <Dashboard />}
               {activeTab === "products" && <ProductManager />}
+              {activeTab === "users" && <UsersManager />}
               {activeTab === "orders" && (
                 <div className="rounded-md border border-graphite/30 p-8 text-center text-graphite">
                   <p>Order management will be available soon.</p>
@@ -153,6 +164,18 @@ export default function Admin() {
       </main>
       
       <Footer />
+      <AlertDialog open={confirmOpen} onOpenChange={(open) => setConfirmOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm logout</AlertDialogTitle>
+            <div className="text-sm text-graphite">Are you sure you want to sign out?</div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { await useAuthStore.getState().logout(); setConfirmOpen(false); navigate('/auth') }}>Sign out</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
