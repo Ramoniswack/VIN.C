@@ -26,6 +26,26 @@ interface CartStore {
   setIsOpen: (isOpen: boolean) => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
+  // hydrate items from server
+  setItems: (items: CartItem[]) => void;
+}
+
+const getCartStorageKey = () => {
+  try {
+    const raw = localStorage.getItem('vinc-auth-storage')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const username = parsed?.state?.user?.username || parsed?.user?.username
+      if (username && typeof username === 'string') {
+        // sanitize username for key
+  const safe = username.replace(/[^a-z0-9-_.]/gi, '_').toLowerCase()
+        return `vinc-cart-storage-${safe}`
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'vinc-cart-storage-guest'
 }
 
 export const useCartStore = create<CartStore>()(
@@ -33,14 +53,14 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
       isOpen: false,
-      
+
       addToCart: (item) => {
         const existingItem = get().items.find(i => 
           i.id === item.id && 
           i.variant?.size === item.variant?.size && 
           i.variant?.color === item.variant?.color
         );
-        
+
         if (existingItem) {
           set({
             items: get().items.map(i =>
@@ -57,7 +77,7 @@ export const useCartStore = create<CartStore>()(
           });
         }
       },
-      
+
       removeFromCart: (id, variant) => {
         set({
           items: get().items.filter(item => 
@@ -67,13 +87,13 @@ export const useCartStore = create<CartStore>()(
           )
         });
       },
-      
+
       updateQuantity: (id, variant, quantity) => {
         if (quantity <= 0) {
           get().removeFromCart(id, variant);
           return;
         }
-        
+
         set({
           items: get().items.map(item =>
             item.id === id && 
@@ -84,25 +104,30 @@ export const useCartStore = create<CartStore>()(
           )
         });
       },
-      
+
       clearCart: () => {
         set({ items: [] });
       },
-      
+
       setIsOpen: (isOpen) => {
         set({ isOpen });
       },
-      
+
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0);
       },
-      
+
       getTotalPrice: () => {
         return get().items.reduce((total, item) => total + (item.price * item.quantity), 0);
       }
+        ,
+          // allow hydrating items from server
+          setItems: (items: CartItem[]) => {
+            set({ items })
+          }
     }),
     {
-      name: 'vinc-cart-storage',
+      name: getCartStorageKey(),
       partialize: (state) => ({ items: state.items })
     }
   )
