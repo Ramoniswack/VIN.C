@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabaseClient';
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default function Auth() {
   const [mode, setMode] = useState<'login' | 'signup'>('signup');
@@ -14,32 +16,248 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const navigate = useNavigate();
   const login = useAuthStore(state => state.login);
+  const signInWithSupabase = useAuthStore(state => state.signInWithSupabase)
+  const signUpWithSupabase = useAuthStore(state => state.signUpWithSupabase)
 
   const handleSocial = (provider: 'google' | 'facebook') => {
-    // Stub: integrate real OAuth here (Supabase, Firebase, or your backend)
-    console.log('Social auth', provider);
-    // For demo, navigate to home
-    navigate('/');
+    // Open OAuth flow via Supabase
+    const client = supabase as unknown as SupabaseClient
+    // Force Google to show consent and request offline access so we get refresh tokens
+    client.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: window.location.origin + '/auth',
+        // queryParams are appended to the provider authorize URL
+        queryParams: {
+          prompt: 'consent',
+          access_type: 'offline',
+          include_granted_scopes: 'true'
+        }
+      }
+    })
+      .then(({ data, error }) => {
+        if (error) console.error('OAuth error', error)
+        if (data?.url) {
+          console.debug('OAuth redirect url', data.url)
+          window.location.href = data.url
+        }
+      })
+      .catch((e) => console.error(e))
   };
 
-  const demoAdminLogin = async () => {
-    // demo login using auth store
-    const ok = await useAuthStore.getState().login('admin', 'admin123');
-    if (ok) navigate('/admin');
-  };
+  // Remove oauthPending: we will auto-finalize OAuth
+
+  // demo admin login removed - use real admin accounts managed via backend
+
+  // Handle OAuth redirect: supabase may append access_token on redirect
+  useEffect(() => {
+    const handle = async () => {
+      try {
+  // capture tokens from URL (if provider returned them in query or fragment)
+
+        const url = new URL(window.location.href)
+        let token = url.searchParams.get('access_token')
+        let refresh = url.searchParams.get('refresh_token')
+        if (!token && window.location.hash) {
+          const hash = window.location.hash.replace(/^#/, '')
+          const frag = new URLSearchParams(hash)
+          token = frag.get('access_token')
+          refresh = frag.get('refresh_token')
+        }
+        if (token) {
+          // Persist tokens locally for API calls (and legacy 'authToken' for older backends)
+          try {
+            localStorage.setItem('supabase_access_token', token)
+            localStorage.setItem('authToken', token)
+            if (refresh) localStorage.setItem('supabase_refresh_token', refresh)
+          } catch (e) {
+            console.warn('Storage set failed', e)
+          }
+
+          // Set session in the client so supabase.auth.getUser() works
+          const client = supabase as unknown as SupabaseClient
+          console.debug('Attempting client.auth.setSession with token', token.substring(0, 20) + '...')
+          let setErr = null
+          try {
+            const res = await client.auth.setSession({ access_token: token, refresh_token: refresh ?? '' })
+            // v2 returns { data, error }
+            // @ts-expect-error - supabase response typing may vary by version
+            setErr = res?.error
+            console.debug('setSession result', res)
+          } catch (e) {
+            console.error('setSession threw', e)
+            setErr = e
+          }
+
+          if (setErr) {
+            console.error('Error setting session after OAuth', setErr)
+            // bail out but keep tokens in storage for manual debugging
+            return
+          }
+
+          // Confirm session has a user before redirecting. Retry once if necessary.
+          let userData = null
+          try {
+            const s = await client.auth.getSession()
+            console.debug('getSession after setSession', s)
+            const got = await client.auth.getUser()
+            console.debug('getUser after setSession', got)
+            userData = got?.data?.user ?? null
+          } catch (e) {
+            console.error('Error getting user after setSession', e)
+          }
+
+          if (!userData) {
+            // Try one more time after a short wait (some providers may delay)
+            await new Promise(r => setTimeout(r, 500))
+            try {
+              const got2 = await client.auth.getUser()
+              console.debug('getUser retry', got2)
+              userData = got2?.data?.user ?? null
+            } catch (e) {
+              console.error('Retry getUser failed', e)
+            }
+          }
+
+          if (userData) {
+            const email = (userData as { email?: string }).email ?? ''
+            // determine admin by querying backend admin list with env fallback
+            const envAdminList = ((import.meta.env.VITE_ADMIN_EMAILS as string) || '')
+              .split(',')
+              .map(s => s.trim().toLowerCase())
+              .filter(Boolean)
+            const fetchAdminList = async (): Promise<string[]> => {
+              try {
+                const resp = await fetch('/api/admin/emails')
+                if (!resp.ok) throw new Error('no admin API')
+                const json = await resp.json()
+                const server = (json.emails || []).map((s: string) => s.toLowerCase())
+                return Array.from(new Set([...envAdminList, ...server]))
+              } catch (e) {
+                return envAdminList
+              }
+            }
+            const adminList = await fetchAdminList()
+            const isAdmin = adminList.includes(email.toLowerCase())
+            const newState = { user: { username: email, isAdmin }, isAuthenticated: true }
+            useAuthStore.setState(newState)
+            // Also update the persisted zustand key immediately so rehydration won't overwrite
+            try {
+              localStorage.setItem('vinc-auth-storage', JSON.stringify({ state: newState }))
+            } catch (e) {
+              console.warn('Failed writing vinc-auth-storage', e)
+            }
+            console.info('OAuth login finalized for', email)
+            // Expose store for debugging in DEV (kept minimal)
+            if (import.meta.env.DEV) {
+              // @ts-expect-error - only used for debugging in dev
+              window.__VINC_AUTH = useAuthStore
+            }
+            // Also update the persisted zustand storage to avoid rehydration overwriting this state
+            try {
+              const key = 'vinc-auth-storage'
+              const raw = localStorage.getItem(key)
+              if (raw) {
+                const parsed = JSON.parse(raw)
+                if (parsed && typeof parsed === 'object') {
+                  if (parsed.state) {
+                    parsed.state.user = { username: email, isAdmin: newState.user.isAdmin }
+                    parsed.state.isAuthenticated = true
+                  } else {
+                    parsed.user = { username: email, isAdmin: newState.user.isAdmin }
+                    parsed.isAuthenticated = true
+                  }
+                  localStorage.setItem(key, JSON.stringify(parsed))
+                }
+              } else {
+                localStorage.setItem(key, JSON.stringify({ state: { user: { username: email, isAdmin: newState.user.isAdmin }, isAuthenticated: true } }))
+              }
+            } catch (e) {
+              console.warn('Failed to update persisted auth state', e)
+            }
+            // Remove tokens from URL fragment for cleanliness
+            try {
+              const cleaned = window.location.origin + window.location.pathname
+              window.history.replaceState({}, document.title, cleaned)
+            } catch (e) {
+              // ignore
+            }
+            // Redirect to user dashboard
+            // respect optional next param so an interrupted flow can continue
+            try {
+              const url = new URL(window.location.href)
+              const next = url.searchParams.get('next')
+              if (next) {
+                const decoded = decodeURIComponent(next)
+                navigate(decoded)
+              } else {
+                navigate(newState.user.isAdmin ? '/admin' : '/dashboard')
+              }
+            } catch (e) {
+              navigate(newState.user.isAdmin ? '/admin' : '/dashboard')
+            }
+          } else {
+            console.warn('No user after setSession; tokens left in storage for debugging')
+          }
+        }
+      } catch (e) {
+        console.error('Error handling OAuth redirect', e)
+      }
+    }
+    handle()
+  }, [navigate])
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    // Demo: use the simple auth store for admin login only
     try {
-      const ok = await login(email, password);
-      if (ok) navigate('/');
-      else setError('Invalid credentials for demo');
+      if (mode === 'login') {
+        const ok = await signInWithSupabase(email, password, rememberMe)
+        if (ok) {
+          // after normal login, determine admin status and navigate accordingly
+          const envAdminList = ((import.meta.env.VITE_ADMIN_EMAILS as string) || '')
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean)
+          const fetchAdminList = async (): Promise<string[]> => {
+              try {
+                const resp = await fetch('/api/admin/emails')
+                if (!resp.ok) throw new Error('no admin API')
+                const json = await resp.json()
+                const server = (json.emails || []).map((s: string) => s.toLowerCase())
+                return Array.from(new Set([...envAdminList, ...server]))
+              } catch (e) {
+                return envAdminList
+              }
+          }
+          const adminList = await fetchAdminList()
+          const isAdmin = adminList.includes(email.toLowerCase())
+          useAuthStore.setState({ user: { username: email, isAdmin }, isAuthenticated: true })
+          try { localStorage.setItem('vinc-auth-storage', JSON.stringify({ state: { user: { username: email, isAdmin }, isAuthenticated: true } })) } catch (e) { console.warn('persist auth storage failed', e) }
+
+          // respect next param
+          const q = new URLSearchParams(window.location.search)
+          const next = q.get('next')
+          if (next) navigate(decodeURIComponent(next))
+          else navigate(isAdmin ? '/admin' : '/dashboard')
+        } else setError('Invalid credentials')
+      } else {
+        const ok = await signUpWithSupabase(email, password, rememberMe)
+        if (ok) {
+          setMode('login')
+          setError('Account created - please login')
+        } else {
+          setError('Signup failed')
+        }
+      }
     } catch (err) {
-      setError('An error occurred');
+      setError('An error occurred')
     }
   };
 
@@ -69,14 +287,7 @@ export default function Auth() {
                     </svg>
                     <span className="text-black font-semibold">{mode === 'login' ? 'Login with Google' : 'Sign up with Google'}</span>
                   </Button>
-                  <Button
-                    className="w-full bg-[#1877F2] text-white flex items-center justify-center space-x-3 rounded-lg py-3 transition-none hover:!bg-[#1877F2] hover:!text-white shadow-sm"
-                    onClick={() => handleSocial('facebook')}
-                    aria-label={mode === 'login' ? 'Login with Facebook' : 'Sign up with Facebook'}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M22 12.07C22 6.48 17.52 2 11.93 2S2 6.48 2 12.07c0 4.99 3.66 9.12 8.44 9.92v-7.03H7.9v-2.89h2.54V9.41c0-2.5 1.49-3.88 3.77-3.88 1.09 0 2.23.2 2.23.2v2.46h-1.25c-1.23 0-1.62.77-1.62 1.56v1.87h2.77l-.44 2.89h-2.33v7.03C18.34 21.19 22 17.06 22 12.07z" fill="#fff"/></svg>
-                    <span className="font-semibold">{mode === 'login' ? 'Login with Facebook' : 'Sign up with Facebook'}</span>
-                  </Button>
+                  {/* Removed Facebook social login as requested */}
                 </div>
                 <div className="text-center text-sm text-graphite mb-4">Or use your email</div>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -92,12 +303,25 @@ export default function Auth() {
                   </div>
                   <div>
                     <Label htmlFor="password">Password</Label>
-                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="rounded-md" />
+                    <div className="relative">
+                      <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="rounded-md pr-10" />
+                      <button type="button" className="absolute right-2 top-2 text-sm text-graphite" onClick={() => setShowPassword(s => !s)} aria-label="Toggle password visibility">
+                        {showPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input id="remember" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                    <Label htmlFor="remember" className="mb-0">Remember me</Label>
                   </div>
                   {error && <div className="text-red-600">{error}</div>}
                   <Button type="submit" className="w-full bg-accent text-ink rounded-lg py-3">{mode === 'login' ? 'Login' : 'Sign up'}</Button>
-                  <Button type="button" variant="ghost" className="w-full mt-2" onClick={demoAdminLogin}>Demo admin login</Button>
                 </form>
+
+
+                {/* OAuth debug UI removed for production-ready login form */}
+
+                {/* Dev auth panel removed to prevent demo admin access; use real admin accounts via backend */}
               </div>
               <aside className="w-full md:w-96 bg-surface/60 border-l px-6 py-6 hidden md:block">
                 <div className="mb-4">

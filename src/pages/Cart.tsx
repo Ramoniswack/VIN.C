@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Minus, Plus, X, ShoppingBag, ArrowRight } from "lucide-react";
+import { toast as sonner } from '@/components/ui/sonner'
 import { useCartStore } from "@/store/cartStore";
+import { useState } from 'react'
 
 export default function Cart() {
   const { items, updateQuantity, removeFromCart, getTotalPrice, getTotalItems } = useCartStore();
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const shippingCost = getTotalPrice() >= 500 ? 0 : 25;
   const tax = Math.round(getTotalPrice() * 0.08); // 8% tax
@@ -36,6 +40,39 @@ export default function Cart() {
         <Footer />
       </div>
     );
+  }
+
+  const handleCheckout = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      // prepare items for backend: convert prices (assume frontend stores price in dollars) to cents
+      const payload = {
+        items: items.map(i => ({ name: i.name, unit_amount: Math.round(i.price * 100), quantity: i.quantity, currency: 'usd' })),
+        successUrl: `${window.location.origin}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${window.location.origin}/cart`,
+        customerEmail: undefined
+      }
+      const resp = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const body = await resp.json()
+      if (!resp.ok) throw new Error(body?.error || 'checkout failed')
+      // redirect to hosted url if provided, otherwise fallback to Stripe checkout url pattern
+      if (body.url) {
+        window.location.href = body.url
+        return
+      }
+      if (body.sessionId) {
+        // redirect to Stripe hosted checkout page
+        window.location.href = `https://checkout.stripe.com/pay/${body.sessionId}`
+        return
+      }
+      throw new Error('no checkout url returned')
+    } catch (err: unknown) {
+      console.error('checkout error', err)
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      setLoading(false)
+    }
   }
 
   return (
@@ -82,11 +119,15 @@ export default function Cart() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeFromCart(item.id, item.variant)}
+                            onClick={() => {
+                              removeFromCart(item.id, item.variant)
+                              try { sonner('Removed from cart', { description: `${item.name} removed.` }) } catch (e) { console.debug('toast failed', e) }
+                            }}
                             className="text-graphite hover:text-paper"
                           >
                             <X className="w-4 h-4" />
                           </Button>
+                          
                         </div>
                         
                         <div className="flex justify-between items-center">
@@ -164,10 +205,11 @@ export default function Cart() {
                     </div>
                   )}
 
-                  <Button className="w-full h-12">
-                    Proceed to Checkout
+                  <Button className="w-full h-12" onClick={handleCheckout} disabled={loading}>
+                    {loading ? 'Redirecting…' : 'Proceed to Checkout'}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
+                  {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
                 </CardContent>
               </Card>
 
