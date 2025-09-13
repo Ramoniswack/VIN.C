@@ -30,6 +30,9 @@ export const Navigation = () => {
   const navBgOnly = isScrolled ? 'bg-bg/95' : (isOverHero ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent');
   const navBorder = isScrolled ? 'border-b border-graphite/20' : (isOverHero ? 'border-b border-black/10' : '');
   const navTopBorder = isScrolled ? 'border-t border-graphite/20' : (isOverHero ? 'border-t border-black/10' : 'border-t border-graphite/10');
+  // determine whether the effective nav background is dark (so mega-menu text should be white)
+  // treat 'black' and 'transparent' backgrounds as dark; otherwise treat as light
+  const navIsDarkBg = /(black|transparent)/.test(navBgOnly);
 
   useEffect(() => {
     let ticking = false;
@@ -99,14 +102,22 @@ export const Navigation = () => {
   const categories = Array.from(new Set(products.map(p => p.category)));
 
   return (
+    // compute account target: admins -> /admin, logged-in users -> /dashboard, otherwise -> /auth
+    (() => {
+      const accountHref = isAuthenticated ? (user?.isAdmin ? '/admin' : '/dashboard') : '/auth'
+      const accountAria = isAuthenticated ? (user?.isAdmin ? 'Open admin dashboard' : 'Open your dashboard') : 'Open account page'
+
+      return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300 ${navBgOnly} ${navBorder}`}>
       <div className="w-full px-2 py-2">
         <div className="w-full grid grid-cols-3 items-center">
 
           {/* Left area - on mobile show toggle + hamburger */}
           <div className="flex items-center space-x-2 justify-start col-start-1 pl-2">
-            <div className="md:hidden flex items-center space-x-2">
-              <ThemeToggle className={`${isOverHero ? 'text-white' : 'text-mink'}`} />
+              <div className="md:hidden flex items-center space-x-2">
+              <div className={`${isOverHero ? 'text-white' : 'text-mink'}`}>
+                <ThemeToggle />
+              </div>
               <Button variant="ghost" size="icon" className={`hover:bg-transparent transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
@@ -143,7 +154,9 @@ export const Navigation = () => {
           <div className="flex items-center space-x-4 justify-end col-start-3 pr-2">
             {/* Theme toggle visible on md+ only (mobile toggle remains on left) */}
             <div className="hidden md:flex">
-              <ThemeToggle className={`${isOverHero ? 'text-white' : 'text-mink'}`} />
+              <div className={`${isOverHero ? 'text-white' : 'text-mink'}`}>
+                <ThemeToggle />
+              </div>
             </div>
 
             <Button variant="ghost" size="icon" aria-label="Open search" title="Search" className={`hover:bg-transparent transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={() => setIsSearchOpen(true)}>
@@ -159,7 +172,7 @@ export const Navigation = () => {
               <span className="absolute -top-1 -right-1 bg-accent-color text-ink text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">{cartItemsCount}</span>
             </Link>
 
-            <Link to={isAuthenticated ? "/admin" : "/auth"} className={`hover:bg-transparent p-2 transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, isAuthenticated ? "/admin" : "/auth")} aria-label={isAuthenticated ? 'Open admin dashboard' : 'Open account page'}>
+              <Link to={accountHref} className={`hover:bg-transparent p-2 transition-colors duration-300 ${isOverHero ? 'text-white hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => handleNavLinkClick(e, accountHref)} aria-label={accountAria}>
               <User className="h-5 w-5" />
             </Link>
 
@@ -181,10 +194,10 @@ export const Navigation = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5 md:gap-8 text-sm md:text-base lg:text-base">
                   {categories.map((cat) => (
                     <div key={cat} className="flex flex-col">
-                      <h6 className="text-sm md:text-base uppercase tracking-wide font-medium mb-2 text-black dark:text-white">{cat}</h6>
+                      <h6 className={`text-sm md:text-base uppercase tracking-wide font-medium mb-2 ${navIsDarkBg ? 'text-white' : 'text-black'}`}>{cat}</h6>
                       <ul className="space-y-2">
                         {products.filter(p => p.category === cat).slice(0,8).map(p => (
-                          <li key={p.id}><Link to={`/product/${p.id}`} className="text-sm md:text-base text-black/85 dark:text-gray-200 hover:underline font-normal">{p.name}</Link></li>
+                          <li key={p.id}><Link to={`/product/${p.id}`} className={`text-sm md:text-base ${navIsDarkBg ? 'text-white/90 hover:underline' : 'text-black hover:underline'} font-normal`}>{p.name}</Link></li>
                         ))}
                       </ul>
                     </div>
@@ -202,8 +215,8 @@ export const Navigation = () => {
                 <Link key={item.label} to={item.href} className={`font-body py-2 transition-colors duration-300 ${isOverHero ? 'text-gray-200 hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => { handleNavLinkClick(e, item.href); setIsMobileMenuOpen(false); }}>{item.label}</Link>
               ))}
 
-              <Link to={isAuthenticated ? "/admin" : "/admin-login"} className={`font-body py-2 transition-colors duration-300 ${isOverHero ? 'text-gray-200 hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => { handleNavLinkClick(e, isAuthenticated ? "/admin" : "/admin-login"); setIsMobileMenuOpen(false); }}>
-                Admin {isAuthenticated ? "Dashboard" : "Login"}
+              <Link to={accountHref} className={`font-body py-2 transition-colors duration-300 ${isOverHero ? 'text-gray-200 hover:text-white' : 'text-mink hover:text-paper'}`} onClick={(e) => { handleNavLinkClick(e, accountHref); setIsMobileMenuOpen(false); }}>
+                {isAuthenticated ? (user?.isAdmin ? 'Admin Dashboard' : 'Dashboard') : 'Login'}
               </Link>
             </div>
           </div>
@@ -228,5 +241,7 @@ export const Navigation = () => {
 
       </div>
     </nav>
+      )
+    })()
   );
 };
