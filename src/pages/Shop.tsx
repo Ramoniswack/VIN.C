@@ -8,6 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Filter, Search, ShoppingBag, Heart, Star } from "lucide-react";
 import { useProductStore, Product as StoreProduct, ProductSize, ProductColor, ProductCategory } from "@/store/productStore";
+import { useAuthStore } from '@/store/authStore'
+import { useCartStore } from '@/store/cartStore'
+import { useWishlistStore } from '@/store/wishlistStore'
+import { useNavigate } from 'react-router-dom'
+import { toast as sonner } from '@/components/ui/sonner'
 
 const filters = {
   size: ["XS", "S", "M", "L", "XL", "XXL"],
@@ -189,13 +194,7 @@ export default function Shop() {
         </div>
 
         {/* Wishlist Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-3 right-3 z-10 h-8 w-8 bg-bg/80 backdrop-blur-sm hover:bg-bg text-graphite hover:text-accent opacity-0 group-hover:opacity-100 transition-all duration-300"
-        >
-          <Heart className="h-4 w-4" />
-        </Button>
+  <WishlistButton product={product} />
 
         {/* Product Image */}
         <div className="aspect-[4/5] overflow-hidden bg-mink/10 relative">
@@ -216,15 +215,7 @@ export default function Shop() {
           )}
           
           {/* Quick Add Button */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-bg/90 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
-            <Button 
-              className="w-full bg-accent text-ink hover:bg-accent/90 font-medium" 
-              disabled={!product.inStock}
-            >
-              <ShoppingBag className="h-4 w-4 mr-2" />
-              {product.inStock ? 'Quick Add' : 'Notify Me'}
-            </Button>
-          </div>
+          <QuickAdd product={product} />
         </div>
 
         {/* Product Info */}
@@ -291,6 +282,83 @@ export default function Shop() {
       </CardContent>
     </Card>
   );
+
+  // Small inline components for wishlist and quick-add that enforce auth
+  function WishlistButton({ product }: { product: Product }) {
+    const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+    const navigate = useNavigate()
+    const wishlistItems = useWishlistStore(state => state.items)
+    const add = useWishlistStore(state => state.add)
+    const remove = useWishlistStore(state => state.remove)
+
+    const isInWishlist = wishlistItems.some(i => Number(i.productId ?? i.id) === product.id)
+
+    const handle = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!isAuthenticated) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)
+        navigate(`/auth?next=${next}`)
+        return
+      }
+      if (isInWishlist) {
+        // remove locally
+        remove(String(product.id))
+        // try remove on server
+        try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          if (token) await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+        } catch (e) { console.debug('wishlist delete failed', e) }
+        try { sonner('Removed from wishlist', { description: `${product.name} removed from your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
+      } else {
+        // add locally
+        add({ id: String(product.id), productId: product.id, title: product.name, image: product.image })
+        // try add on server
+        try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          if (token) await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+        } catch (e) { console.debug('wishlist add failed', e) }
+        try { sonner('Added to wishlist', { description: `${product.name} added to your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
+      }
+    }
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handle}
+        className="absolute top-3 right-3 z-10 h-8 w-8 bg-bg/80 backdrop-blur-sm hover:bg-bg text-graphite hover:text-accent opacity-0 group-hover:opacity-100 transition-all duration-300"
+      >
+        <Heart className={`h-4 w-4 ${isInWishlist ? 'fill-current text-accent' : ''}`} />
+      </Button>
+    )
+  }
+
+  function QuickAdd({ product }: { product: Product }) {
+    const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+    const addToCart = useCartStore(state => state.addToCart)
+    const navigate = useNavigate()
+    const handle = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!isAuthenticated) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)
+        navigate(`/auth?next=${next}`)
+        return
+      }
+      addToCart({ id: product.id, name: product.name, price: product.price, image: product.image, quantity: 1 })
+      try { sonner('Added to cart', { description: `${product.name} added to your cart.` }) } catch (e) { console.debug('toast failed', e) }
+    }
+    return (
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-bg/90 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
+        <Button 
+          className="w-full bg-accent text-ink hover:bg-accent/90 font-medium" 
+          disabled={!product.inStock}
+          onClick={handle}
+        >
+          <ShoppingBag className="h-4 w-4 mr-2" />
+          {product.inStock ? 'Quick Add' : 'Notify Me'}
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-bg">

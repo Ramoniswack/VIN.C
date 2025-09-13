@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Minus, Plus, Heart, Share2, Truck, RotateCcw, Shield } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
+import { useWishlistStore } from '@/store/wishlistStore'
+import { useAuthStore } from '@/store/authStore'
 import { useProductStore, Product } from "@/store/productStore";
+import { toast as sonner } from '@/components/ui/sonner'
 
 export default function ProductDetail() {
   const { id: productId } = useParams<{ id: string }>();
@@ -21,6 +24,10 @@ export default function ProductDetail() {
   const [isWishlisted, setIsWishlisted] = useState(false);
   
   const addToCart = useCartStore((state) => state.addToCart);
+  const wishlistItems = useWishlistStore(state => state.items)
+  const addWishlist = useWishlistStore(state => state.add)
+  const removeWishlist = useWishlistStore(state => state.remove)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   
   // Get product from store
   const product = getProduct(Number(productId));
@@ -72,6 +79,12 @@ export default function ProductDetail() {
     [];
 
   const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      // force login and return to this product afterwards
+      const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)
+      navigate(`/auth?next=${next}`)
+      return
+    }
     if (selectedVariant && isInStock && selectedColor) {
       addToCart({
         id: product.id,
@@ -85,6 +98,7 @@ export default function ProductDetail() {
         },
         quantity
       });
+  try { sonner('Added to cart', { description: `${product.name} added to your cart.` }) } catch (e) { console.debug('toast failed', e) }
     }
   };
 
@@ -246,7 +260,31 @@ export default function ProductDetail() {
               <div className="flex space-x-3">
                 <Button
                   variant="outline"
-                  onClick={() => setIsWishlisted(!isWishlisted)}
+                  onClick={async () => {
+                    if (!isAuthenticated) {
+                      const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)
+                      navigate(`/auth?next=${next}`)
+                      return
+                    }
+                    const inList = wishlistItems.some(i => Number(i.productId ?? i.id) === product.id)
+                    if (inList) {
+                      removeWishlist(String(product.id))
+                      try {
+                        const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+                        if (token) await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+                      } catch (e) { /* ignore */ }
+                      setIsWishlisted(false)
+                      try { sonner('Removed from wishlist', { description: `${product.name} removed from your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
+                    } else {
+                      addWishlist({ id: String(product.id), productId: product.id, title: product.name, image: product.image })
+                      try {
+                        const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+                        if (token) await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+                      } catch (e) { /* ignore */ }
+                      setIsWishlisted(true)
+                      try { sonner('Added to wishlist', { description: `${product.name} added to your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
+                    }
+                  }}
                   className="flex-1"
                 >
                   <Heart className={`w-4 h-4 mr-2 ${isWishlisted ? 'fill-current' : ''}`} />
