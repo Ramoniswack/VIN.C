@@ -48,7 +48,7 @@ export const ProductForm = ({
   const [mainImageFile, setMainImageFile] = useState<ImageFile | null>(null);
   const [additionalImageFiles, setAdditionalImageFiles] = useState<ImageFile[]>([]);
   
-  const { register, handleSubmit, control, formState: { errors }, setValue, watch } = useForm<ProductFormValues>({
+  const { register, handleSubmit, control, formState: { errors }, setValue, watch, setError, clearErrors } = useForm<ProductFormValues>({
     defaultValues: product ? {
       ...product
     } : {
@@ -111,7 +111,18 @@ export const ProductForm = ({
     setValue("sizes", watchSizes.filter(s => s !== size));
   };
   
+  const [imageError, setImageError] = useState<string | null>(null)
+
   const onFormSubmit = (data: ProductFormValues) => {
+    // ensure main image exists (either uploaded or existing product image)
+    const mainImage = mainImageFile?.url || data.image || product?.image
+    if (!mainImage) {
+      setImageError('Main product image is required')
+      return
+    } else {
+      setImageError(null)
+    }
+
     onSubmit({
       ...data,
       mainImageFile: mainImageFile?.file,
@@ -125,6 +136,7 @@ export const ProductForm = ({
         : `${data.name} has been added to your inventory`,
     });
   };
+
 
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8 bg-mink/5 rounded-lg p-4 md:p-6 shadow-sm">
@@ -147,7 +159,12 @@ export const ProductForm = ({
                   id="name"
                   className="bg-transparent border-graphite/30 focus:border-accent/50 focus-within:ring-accent/30"
                   placeholder="Enter product name"
-                  {...register("name", { required: "Product name is required" })}
+                  {...register("name", { 
+                    required: "Product name is required",
+                    minLength: { value: 3, message: 'Name must be at least 3 characters' },
+                    maxLength: { value: 120, message: 'Name must be at most 120 characters' },
+                    pattern: { value: /^[\p{L}0-9 .,'()\-:&]+$/u, message: 'Name contains invalid characters' }
+                  })}
                 />
                 {errors.name && (
                   <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -167,18 +184,24 @@ export const ProductForm = ({
                   </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-graphite">$</span>
-                    <Input
-                      id="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="bg-transparent border-graphite/30 focus:border-accent/50 pl-7 focus-within:ring-accent/30"
-                      placeholder="0.00"
-                      {...register("price", { 
-                        required: "Price is required",
-                        min: { value: 0, message: "Price must be positive" }
-                      })}
-                    />
+                      <Input
+                        id="price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="bg-transparent border-graphite/30 focus:border-accent/50 pl-7 focus-within:ring-accent/30"
+                        placeholder="0.00"
+                        {...register("price", { 
+                          required: "Price is required",
+                          min: { value: 0, message: "Price must be positive" },
+                          validate: value => {
+                            // enforce two-decimal precision
+                            const str = String(value)
+                            if (/^\d+(\.\d{1,2})?$/.test(str)) return true
+                            return 'Price must have at most two decimal places'
+                          }
+                        })}
+                      />
                   </div>
                   {errors.price && (
                     <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -219,7 +242,10 @@ export const ProductForm = ({
                   id="description"
                   className="bg-transparent border-graphite/30 focus:border-accent/50 min-h-[100px] focus-within:ring-accent/30"
                   placeholder="Enter product description"
-                  {...register("description")}
+                  {...register("description", {
+                    maxLength: { value: 2000, message: 'Description must be at most 2000 characters' },
+                    minLength: { value: 10, message: 'Description must be at least 10 characters' }
+                  })}
                 />
               </div>
               
@@ -233,7 +259,10 @@ export const ProductForm = ({
                     id="sku"
                     className="bg-transparent border-graphite/30 focus:border-accent/50 focus-within:ring-accent/30"
                     placeholder="SKU identifier"
-                    {...register("sku")}
+                    {...register("sku", {
+                      maxLength: { value: 64, message: 'SKU must be at most 64 characters' },
+                      pattern: { value: /^[A-Z0-9\-_.]+$/i, message: 'SKU may only contain letters, numbers, hyphens, underscores, or dots' }
+                    })}
                   />
                 </div>
                 
@@ -521,6 +550,9 @@ export const ProductForm = ({
             onAdditionalImagesChange={handleAdditionalImagesChange}
             onRemoveAdditionalImage={handleRemoveAdditionalImage}
           />
+          {errors.image && (
+            <p className="text-red-500 text-xs mt-2">{errors.image?.message as string}</p>
+          )}
         </div>
       </div>
       

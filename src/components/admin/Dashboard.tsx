@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from 'react'
 import { Link } from "react-router-dom";
 import { 
   Card, 
@@ -27,37 +27,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-// Admin dashboard statistics
-const stats = [
-  {
-    title: "Total Revenue",
-    value: "$85,240",
-    change: "+12.5%",
-    trend: "up",
-    icon: DollarSign,
-  },
-  {
-    title: "Total Orders",
-    value: "683",
-    change: "+8.2%",
-    trend: "up",
-    icon: ShoppingCart,
-  },
-  {
-    title: "Products",
-    value: "48",
-    change: "+4",
-    trend: "up",
-    icon: Package,
-  },
-  {
-    title: "Customers",
-    value: "3,271",
-    change: "+18.3%",
-    trend: "up",
-    icon: Users,
-  },
-];
+// default stats shown as fallback
+const defaultStats = [
+  { title: 'Total Revenue', value: '$0', change: '+0%', trend: 'up', icon: DollarSign },
+  { title: 'Total Orders', value: '0', change: '+0%', trend: 'up', icon: ShoppingCart },
+  { title: 'Products', value: '0', change: '+0', trend: 'up', icon: Package },
+  { title: 'Customers', value: '0', change: '+0%', trend: 'up', icon: Users },
+]
 
 // Top selling products
 const topSellingProducts = [
@@ -126,7 +102,40 @@ const recentOrders = [
   },
 ];
 
+type RecentOrder = { id: string; customer: string; date: string; status: string; total: string }
+type ReceivedOrder = { id?: number; email?: string | null; createdAt?: string | Date; status?: string | null; amountTotal?: number }
+
 export const Dashboard = () => {
+  const [stats, setStats] = useState(defaultStats)
+  const [recentOrdersState, setRecentOrdersState] = useState<RecentOrder[]>(recentOrders as RecentOrder[])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers.Authorization = `Bearer ${token}`
+        const resp = await fetch('/api/admin/orders', { headers })
+        if (!resp.ok) throw new Error('no admin orders')
+        const json = await resp.json()
+        if (json?.ok) {
+          const totalRevenue = Number(json.stats.totalRevenue) || 0
+          const totalOrders = Number(json.stats.totalOrders) || 0
+          setStats([
+            { title: 'Total Revenue', value: `$${(totalRevenue/100).toLocaleString()}`, change: '+0%', trend: 'up', icon: DollarSign },
+            { title: 'Total Orders', value: `${totalOrders}`, change: '+0%', trend: 'up', icon: ShoppingCart },
+            { title: 'Products', value: '—', change: '+0', trend: 'up', icon: Package },
+            { title: 'Customers', value: '—', change: '+0%', trend: 'up', icon: Users },
+          ])
+          const received = (json.recent as ReceivedOrder[]) || []
+          setRecentOrdersState(received.map((r) => ({ id: `#${r.id}`, customer: r.email ?? '—', date: new Date(r.createdAt || Date.now()).toLocaleDateString(), status: r.status ?? '—', total: `$${((r.amountTotal||0)/100).toFixed(2) }` })))
+        }
+      } catch (e) {
+        // keep defaults
+      }
+    }
+    fetchStats()
+  }, [])
   return (
     <div className="space-y-8">
       {/* Stats */}
@@ -226,7 +235,7 @@ export const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOrders.map((order, index) => (
+                  {recentOrdersState.map((order, index) => (
                     <tr key={index} className="border-b border-graphite/10 hover:bg-mink/5">
                       <td className="p-3 text-paper">{order.id}</td>
                       <td className="p-3 text-paper">{order.customer}</td>
@@ -250,7 +259,7 @@ export const Dashboard = () => {
             
             {/* Mobile Order Cards */}
             <div className="md:hidden">
-              {recentOrders.map((order, index) => (
+              {recentOrdersState.map((order, index) => (
                 <div key={index} className="border-b border-graphite/10 p-4">
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-medium text-paper">{order.id}</span>
