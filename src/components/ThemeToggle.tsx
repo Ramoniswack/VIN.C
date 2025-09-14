@@ -1,12 +1,12 @@
 import { Moon, Sun } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 
 export const ThemeToggle = () => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <Button
+    <IconButton
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
@@ -18,6 +18,6 @@ export const ThemeToggle = () => {
       ) : (
         <Sun className="h-5 w-5" />
       )}
-    </Button>
+    </IconButton>
   );
 };

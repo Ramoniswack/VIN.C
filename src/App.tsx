@@ -32,44 +32,22 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import NewPage from "./pages/New";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminOrders from './pages/admin/Orders'
+import AdminCalendar from './pages/admin/Calendar'
+import AdminSettings from './pages/admin/Settings'
+import Orders from './pages/quick/OrdersPage'
+import RecentlyViewed from './pages/quick/RecentlyViewedPage'
+import WishlistPage from './pages/quick/WishlistPage'
+import Settings from './pages/quick/SettingsPage'
+import Policies from './pages/quick/PoliciesPage'
+import Help from './pages/quick/HelpPage'
+import Feedback from './pages/quick/FeedbackPage'
+import Messages from './pages/placeholder/Messages'
+import Support from './pages/placeholder/Support'
+import Reviews from './pages/placeholder/Reviews'
+import Profile from './pages/placeholder/Profile'
 
 const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthWatcher />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/shop" element={<Shop />} />
-            <Route path="/product/:id" element={<ProductDetail />} />
-            <Route path="/lookbook" element={<Lookbook />} />
-            <Route path="/collections" element={<Collections />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/checkout-success" element={<CheckoutSuccess />} />
-            <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/new" element={<NewPage />} />
-            <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
-            <Route path="/admin/products/new" element={<RequireAdmin><AddProduct /></RequireAdmin>} />
-            <Route path="/admin/products/edit/:productId" element={<RequireAdmin><EditProduct /></RequireAdmin>} />
-            <Route path="/admin/products/view/:id" element={<RequireAdmin><ViewProduct /></RequireAdmin>} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
-
-export default App;
 
 function AuthWatcher() {
   const navigate = useNavigate()
@@ -82,13 +60,24 @@ function AuthWatcher() {
       .map(s => s.trim().toLowerCase())
       .filter(Boolean)
 
+    const buildHeaders = (token?: string) => {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      // Only enable the dev auth bypass when explicitly enabled with VITE_DEV_AUTH_ENABLED=true
+      const devAuthEnabled = Boolean(import.meta.env && String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true')
+      if (devAuthEnabled && import.meta.env && import.meta.env.DEV) {
+  if (String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true') headers['X-ADMIN'] = '1'
+        headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+      }
+      if (token) headers.Authorization = `Bearer ${token}`
+      return headers
+    }
+
     const fetchAdminList = async (): Promise<string[]> => {
       try {
-        const resp = await fetch('/api/admin/emails')
+        const resp = await fetch('/api/admin/emails', { headers: buildHeaders() })
         if (!resp.ok) throw new Error('no admin API')
         const json = await resp.json()
         const server = (json.emails || []).map((s: string) => s.toLowerCase())
-        // merge env list and server list, prefer uniqueness
         return Array.from(new Set([...envAdminList, ...server]))
       } catch (e) {
         return envAdminList
@@ -101,145 +90,42 @@ function AuthWatcher() {
       return lookup.includes(email.toLowerCase())
     }
 
-    // sync existing session on load: fetch admin list, upsert user, and merge guest cart
     const sync = async () => {
       try {
         const adminList = await fetchAdminList()
         const s = await client.auth.getSession()
-        const user = s?.data?.session?.user ?? null
-        if (user) {
-          const email = user.email ?? ''
-          const detectedIsAdmin = isAdminEmail(email, adminList)
-          // preserve any previously-known admin flag if detection fails or list is empty
-          const prevIsAdmin = useAuthStore.getState().user?.isAdmin ?? false
-          const isAdmin = detectedIsAdmin || prevIsAdmin
-          // Do not overwrite an existing authenticated session (e.g. AdminLogin)
-          const current = useAuthStore.getState()
-          if (!current.isAuthenticated) {
-            useAuthStore.setState({ user: { username: email, isAdmin }, isAuthenticated: true })
-          }
+        const supaUser = s?.data?.session?.user ?? null
 
-          // NOTE: Do NOT auto-redirect admins here. AdminLogin explicitly routes
-          // to `/admin` after successful sign-in. Allow admins to browse the
-          // public site without being forced back to the admin dashboard.
-
-          // upsert user to backend (best-effort) but rate-limit attempts and
-          // avoid logging full server error objects which can be noisy.
-          try {
-            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-            if (token) {
-              const last = Number(sessionStorage.getItem('vinc-upsert-last') || '0') || 0
-              const now = Date.now()
-              // skip if we attempted upsert within the last 5 minutes
-              if (now - last > 1000 * 60 * 5) {
-                const metadata = (user as unknown as Record<string, unknown>)?.user_metadata ?? undefined
-                const supabaseId = (user as unknown as Record<string, unknown>)?.id ?? undefined
-                const nameFromMeta = (metadata && (metadata as Record<string, unknown>)['full_name']) ?? (metadata && (metadata as Record<string, unknown>)['name']) ?? undefined
-                const resp = await fetch('/api/users/upsert', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                  body: JSON.stringify({ email, name: nameFromMeta, supabaseId })
-                })
-                sessionStorage.setItem('vinc-upsert-last', String(now))
-                if (!resp.ok) {
-                  try { const json = await resp.json(); console.debug('User upsert response', json?.error ?? resp.statusText) } catch { console.debug('User upsert failed with status', resp.status) }
-                }
-              }
-            }
-          } catch (e) {
-            console.debug('User upsert failed')
-          }
-
-          // merge guest cart from localStorage into server cart (best-effort)
-          try {
-            const guestRaw = localStorage.getItem('vinc-cart-storage-guest')
-            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-            if (guestRaw && token) {
-              const parsed = JSON.parse(guestRaw)
-              const items = parsed?.state?.items ?? parsed?.items ?? []
-              for (const it of items) {
-                try {
-                  await fetch('/api/cart', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: it.id, quantity: it.quantity || 1, variant: it.variant ? JSON.stringify(it.variant) : undefined }) })
-                } catch (e) {
-                  /* ignore individual item failures */
-                }
-              }
-              // clear guest cart once merged
-              try { localStorage.removeItem('vinc-cart-storage-guest') } catch (e) { console.warn('clear guest cart failed', e) }
-            }
-          } catch (e) {
-            // ignore merge errors
-          }
-          // fetch server cart and hydrate local cart store
-          try {
-            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-            if (token) {
-              const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-              const resp = await fetch('/api/cart', { headers })
-              if (resp.ok) {
-                const json = await resp.json()
-                type ServerCartItem = { id?: number; productId?: number; quantity?: number; variant?: string | null; product?: { id?: number; title?: string; price?: number; images?: string[] } }
-                const items = Array.isArray(json.items) ? (json.items as ServerCartItem[]).map((it) => ({ id: it.product?.id ?? it.productId ?? it.id ?? 0, name: it.product?.title ?? '', price: it.product?.price ?? 0, image: (it.product?.images && it.product.images[0]) || '', variant: it.variant ? JSON.parse(it.variant) : undefined, quantity: it.quantity ?? 1 })) : []
-                try { useCartStore.getState().setItems(items) } catch (e) { /* ignore */ }
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
-          // fetch wishlist and hydrate
-          try {
-            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-            if (token) {
-              const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-              const resp = await fetch('/api/wishlist', { headers })
-              if (resp.ok) {
-                const json = await resp.json()
-                type ServerWishlistItem = { id?: number; productId?: number; product?: { id?: number; title?: string; images?: string[] } }
-                const items = Array.isArray(json.items) ? (json.items as ServerWishlistItem[]).map((it) => ({ id: it.id ?? it.productId ?? it.product?.id ?? 0, productId: it.productId ?? it.product?.id, title: it.product?.title ?? '', image: it.product?.images?.[0] ?? '' })) : []
-                try { useWishlistStore.getState().setItems(items) } catch (e) { /* ignore */ }
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
+        // Determine an email to use: prefer Supabase session user, otherwise
+        // fall back to the locally persisted auth store (useful in dev).
+        let email = supaUser?.email ?? ''
+        if (!email) {
+          const local = useAuthStore.getState().user
+          if (local && local.username) email = local.username
         }
-      } catch (e) {
-        console.error('AuthWatcher sync error', e)
-      }
-    }
-    sync()
+        if (!email) return
 
-    // listen to auth state changes
-      const { data: listener } = client.auth.onAuthStateChange(async (event, session) => {
-      const adminList = await fetchAdminList()
-      const user = session?.user ?? null
-  if (user) {
-  const email = user.email ?? ''
-  const detectedIsAdmin = isAdminEmail(email, adminList)
-  const prevIsAdmin = useAuthStore.getState().user?.isAdmin ?? false
-  const isAdmin = detectedIsAdmin || prevIsAdmin
-  const current = useAuthStore.getState()
-  if (!current.isAuthenticated) {
-    useAuthStore.setState({ user: { username: email, isAdmin }, isAuthenticated: true })
-  }
+        const detectedIsAdmin = isAdminEmail(email, adminList)
+        const prevIsAdmin = useAuthStore.getState().user?.isAdmin ?? false
+        const isAdmin = detectedIsAdmin || prevIsAdmin
+        const current = useAuthStore.getState()
+        if (!current.isAuthenticated) {
+          useAuthStore.setState({ user: { username: email, isAdmin }, isAuthenticated: true })
+        }
 
-        // NOTE: we intentionally do NOT auto-navigate to `/admin` here. The
-        // `AdminLogin` flow is responsible for sending an admin user to the
-        // admin dashboard. Leaving navigation control to explicit login flows
-        // avoids surprising redirects when admins browse the site.
-
-  // upsert user on auth changes (login)
+        // upsert user (rate-limited)
         try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
           const last = Number(sessionStorage.getItem('vinc-upsert-last') || '0') || 0
           const now = Date.now()
           if (now - last > 1000 * 60 * 5) {
-            const metadata = (user as unknown as Record<string, unknown>)?.user_metadata ?? undefined
-            const supabaseId = (user as unknown as Record<string, unknown>)?.id ?? undefined
+            // If we have a Supabase user, try to get richer metadata; otherwise
+            // fall back to local store values.
+            const metadata = supaUser ? ((supaUser as unknown as Record<string, unknown>)?.user_metadata ?? undefined) : undefined
+            const supabaseId = supaUser ? ((supaUser as unknown as Record<string, unknown>)?.id ?? undefined) : undefined
             const nameFromMeta = (metadata && (metadata as Record<string, unknown>)['full_name']) ?? (metadata && (metadata as Record<string, unknown>)['name']) ?? undefined
-            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-            const resp = await fetch('/api/users/upsert', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-              body: JSON.stringify({ email, name: nameFromMeta, supabaseId })
-            })
+            const headers = buildHeaders(token)
+            const resp = await fetch('/api/users/upsert', { method: 'POST', headers, body: JSON.stringify({ email, name: nameFromMeta, supabaseId }) })
             sessionStorage.setItem('vinc-upsert-last', String(now))
             if (!resp.ok) {
               try { const json = await resp.json(); console.debug('User upsert response', json?.error ?? resp.statusText) } catch { console.debug('User upsert failed with status', resp.status) }
@@ -248,40 +134,322 @@ function AuthWatcher() {
         } catch (e) {
           console.debug('User upsert failed')
         }
-        // fetch server cart and hydrate local cart store on auth change
+
+        // merge guest cart (only when token present)
+        try {
+          const guestRaw = localStorage.getItem('vinc-cart-storage-guest')
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          if (guestRaw && token) {
+            const parsed = JSON.parse(guestRaw)
+            const items = parsed?.state?.items ?? parsed?.items ?? []
+            for (const it of items) {
+              try {
+                await fetch('/api/cart', { method: 'POST', headers: buildHeaders(token), body: JSON.stringify({ productId: it.id, quantity: it.quantity || 1, variant: it.variant ? JSON.stringify(it.variant) : undefined }) })
+              } catch (e) { /* ignore individual item failures */ }
+            }
+            try { localStorage.removeItem('vinc-cart-storage-guest') } catch (e) { console.warn('clear guest cart failed', e) }
+          }
+        } catch (e) { /* ignore */ }
+
+        // merge guest wishlist (only when token present)
+        try {
+          const guestRaw = localStorage.getItem('vinc-wishlist-storage-guest')
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          if (guestRaw && token) {
+            const parsed = JSON.parse(guestRaw)
+            const items = parsed?.state?.items ?? parsed?.items ?? []
+            for (const it of items) {
+              try {
+                await fetch('/api/wishlist', { method: 'POST', headers: buildHeaders(token), body: JSON.stringify({ productId: it.productId ?? it.id }) })
+              } catch (e) { /* ignore individual item failures */ }
+            }
+            try { localStorage.removeItem('vinc-wishlist-storage-guest') } catch (e) { console.warn('clear guest wishlist failed', e) }
+          }
+        } catch (e) { /* ignore */ }
+
+        // fetch server cart
         try {
           const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-          if (token) headers.Authorization = `Bearer ${token}`
-          const resp = await fetch('/api/cart', { headers })
+          const resp = await fetch('/api/cart', { headers: buildHeaders(token) })
+          if (resp.ok) {
+            const json = await resp.json()
+              try { console.debug('Fetched /api/cart', json); (window as unknown as { __lastCartFetch?: unknown }).__lastCartFetch = json } catch (e) { /* ignore */ }
+              type ServerCartItem = { id?: number; productId?: number; quantity?: number; variant?: string | null; product?: { id?: number; title?: string; price?: number; images?: string[] } }
+              const items: Array<{ id: number; name: string; price: number; image: string; variant?: unknown; quantity: number }> = Array.isArray(json.items) ? (json.items as ServerCartItem[]).map((it) => ({ id: Number(it.product?.id ?? it.productId ?? it.id ?? 0), name: it.product?.title ?? '', price: it.product?.price ?? 0, image: (it.product?.images && it.product.images[0]) || '', variant: it.variant ? (typeof it.variant === 'string' ? (() => { try { return JSON.parse(it.variant as string) } catch { return undefined } })() : it.variant) : undefined, quantity: it.quantity ?? 1 })) : []
+            try {
+              // Merge server cart with local cart to avoid wiping optimistic local additions.
+              const local = useCartStore.getState().items || []
+              const keyFor = (it: { id?: number; variant?: unknown }) => {
+                let v = ''
+                const variant = it.variant
+                if (variant && typeof variant === 'object') {
+                  const asObj = variant as Record<string, unknown>
+                  v = String(asObj['size'] ?? asObj['color'] ?? '')
+                }
+                return `${it.id}-${v || ''}`
+              }
+              const map = new Map<string, { id: number; name: string; price: number; image: string; variant?: unknown; quantity: number }>()
+              // add server items first
+              for (const it of items) map.set(keyFor(it), it)
+              // merge/append local items that aren't present on server, or keep higher quantity
+              for (const l of local) {
+                const k = keyFor(l)
+                const s = map.get(k)
+                if (!s) map.set(k, l)
+                else {
+                  // prefer the larger quantity so we don't lose optimistic increments
+                  const qtyLocal = l.quantity ?? 0
+                  const qtyServer = s.quantity ?? 0
+                  if (qtyLocal > qtyServer) map.set(k, { ...s, quantity: qtyLocal })
+                }
+              }
+              const merged = Array.from(map.values())
+              useCartStore.getState().setItems(merged)
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+
+        // fetch wishlist
+        try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          const resp = await fetch('/api/wishlist', { headers: buildHeaders(token) })
+          if (resp.ok) {
+            const json = await resp.json()
+            try { console.debug('Fetched /api/wishlist', json); (window as unknown as { __lastWishlistFetch?: unknown }).__lastWishlistFetch = json } catch (e) { /* ignore */ }
+            type ServerWishlistItem = { id?: number; productId?: number; product?: { id?: number; title?: string; images?: string[] } }
+            const items: Array<{ id: number; productId?: number; title?: string; image?: string }> = Array.isArray(json.items) ? (json.items as ServerWishlistItem[]).map((it) => ({ id: Number(it.id ?? it.productId ?? it.product?.id ?? 0), productId: it.productId ?? it.product?.id, title: it.product?.title ?? '', image: it.product?.images?.[0] ?? '' })) : []
+            try {
+              // Merge server wishlist with local wishlist to avoid wiping optimistic local additions.
+              const local = useWishlistStore.getState().items || []
+              const serverMap = new Map<number, { id: number; productId?: number; title?: string; image?: string }>()
+              for (const it of items) serverMap.set(Number(it.id ?? it.productId ?? 0), it)
+              for (const l of local) {
+                const pid = Number(l.productId ?? l.id)
+                if (!serverMap.has(pid)) {
+                  serverMap.set(pid, {
+                    id: Number(l.id ?? pid) || 0,
+                    productId: l.productId ? Number(l.productId) : (Number(l.id) || undefined),
+                    title: l.title ?? '',
+                    image: l.image ?? ''
+                  })
+                }
+              }
+              const merged = Array.from(serverMap.values()).map((v) => ({ id: v.id ?? 0, productId: v.productId, title: v.title ?? '', image: v.image ?? '' }))
+              useWishlistStore.getState().setItems(merged)
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+      } catch (e) {
+        console.error('AuthWatcher sync error', e)
+      }
+    }
+
+    sync()
+
+    const { data: listener } = client.auth.onAuthStateChange(async (_event, session) => {
+      const adminList = await fetchAdminList()
+      const user = session?.user ?? null
+      if (user) {
+        const email = user.email ?? ''
+        const detectedIsAdmin = isAdminEmail(email, adminList)
+        const prevIsAdmin = useAuthStore.getState().user?.isAdmin ?? false
+        const isAdmin = detectedIsAdmin || prevIsAdmin
+        const current = useAuthStore.getState()
+        if (!current.isAuthenticated) {
+          useAuthStore.setState({ user: { username: email, isAdmin }, isAuthenticated: true })
+        }
+
+        // upsert on auth change
+        try {
+          const last = Number(sessionStorage.getItem('vinc-upsert-last') || '0') || 0
+          const now = Date.now()
+          if (now - last > 1000 * 60 * 5) {
+            const metadata = (user as unknown as Record<string, unknown>)?.user_metadata ?? undefined
+            const supabaseId = (user as unknown as Record<string, unknown>)?.id ?? undefined
+            const nameFromMeta = (metadata && (metadata as Record<string, unknown>)['full_name']) ?? (metadata && (metadata as Record<string, unknown>)['name']) ?? undefined
+            const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+            const resp = await fetch('/api/users/upsert', { method: 'POST', headers: buildHeaders(token), body: JSON.stringify({ email, name: nameFromMeta, supabaseId }) })
+            sessionStorage.setItem('vinc-upsert-last', String(now))
+            if (!resp.ok) {
+              try { const json = await resp.json(); console.debug('User upsert response', json?.error ?? resp.statusText) } catch { console.debug('User upsert failed with status', resp.status) }
+            }
+          }
+        } catch (e) { console.debug('User upsert failed') }
+
+        // fetch cart on auth change
+        try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          const resp = await fetch('/api/cart', { headers: buildHeaders(token) })
           if (resp.ok) {
             const json = await resp.json()
             type ServerCartItem = { id?: number; productId?: number; quantity?: number; variant?: string | null; product?: { id?: number; title?: string; price?: number; images?: string[] } }
             const items = Array.isArray(json.items) ? (json.items as ServerCartItem[]).map((it) => ({ id: it.product?.id ?? it.productId ?? it.id ?? 0, name: it.product?.title ?? '', price: it.product?.price ?? 0, image: (it.product?.images && it.product.images[0]) || '', variant: it.variant ? JSON.parse(it.variant) : undefined, quantity: it.quantity ?? 1 })) : []
-            try { useCartStore.getState().setItems(items) } catch (e) { /* ignore */ }
+            try {
+              // Merge server cart with local cart on auth change
+              const local = useCartStore.getState().items || []
+              const keyFor = (it: { id?: number; variant?: unknown }) => {
+                let v = ''
+                const variant = it.variant
+                if (variant && typeof variant === 'object') {
+                  const asObj = variant as Record<string, unknown>
+                  v = String(asObj['size'] ?? asObj['color'] ?? '')
+                }
+                return `${it.id}-${v || ''}`
+              }
+              const map = new Map<string, { id: number; name: string; price: number; image: string; variant?: unknown; quantity: number }>()
+              for (const it of items) map.set(keyFor(it), it)
+              for (const l of local) {
+                const k = keyFor(l)
+                const s = map.get(k)
+                if (!s) map.set(k, l)
+                else {
+                  const qtyLocal = l.quantity ?? 0
+                  const qtyServer = s.quantity ?? 0
+                  if (qtyLocal > qtyServer) map.set(k, { ...s, quantity: qtyLocal })
+                }
+              }
+              useCartStore.getState().setItems(Array.from(map.values()))
+            } catch (e) { /* ignore */ }
           }
-        } catch (e) {
-          // ignore
-        }
-        } else {
-        // clear auth state when signed out but do NOT force navigation to the login page.
-        // This lets public pages remain viewable. Only protected routes use `RequireAuth`.
+        } catch (e) { /* ignore */ }
+
+        // fetch wishlist on auth change
+        try {
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          const resp = await fetch('/api/wishlist', { headers: buildHeaders(token) })
+          if (resp.ok) {
+            const json = await resp.json()
+            type ServerWishlistItem = { id?: number; productId?: number; product?: { id?: number; title?: string; images?: string[] } }
+            const items = Array.isArray(json.items) ? (json.items as ServerWishlistItem[]).map((it) => ({ id: it.id ?? it.productId ?? it.product?.id ?? 0, productId: it.productId ?? it.product?.id, title: it.product?.title ?? '', image: it.product?.images?.[0] ?? '' })) : []
+            try {
+              // Merge server wishlist with local wishlist on auth change
+              const local = useWishlistStore.getState().items || []
+              const serverMap = new Map<number, { id: number; productId?: number; title?: string; image?: string }>()
+              for (const it of items) serverMap.set(Number(it.id ?? it.productId ?? 0), it)
+              for (const l of local) {
+                const pid = Number(l.productId ?? l.id)
+                if (!serverMap.has(pid)) {
+                  serverMap.set(pid, {
+                    id: Number(l.id ?? pid) || 0,
+                    productId: l.productId ? Number(l.productId) : (Number(l.id) || undefined),
+                    title: l.title ?? '',
+                    image: l.image ?? ''
+                  })
+                }
+              }
+              const merged = Array.from(serverMap.values()).map((v) => ({ id: v.id ?? 0, productId: v.productId, title: v.title ?? '', image: v.image ?? '' }))
+              useWishlistStore.getState().setItems(merged)
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+
+      } else {
         useAuthStore.setState({ user: null, isAuthenticated: false })
       }
     })
 
     return () => {
-      // listener may expose unsubscribe in different shapes depending on supabase version
-      type ListenerShape = { subscription?: { unsubscribe?: () => void }; unsubscribe?: () => void }
-      const l = (listener as unknown) as ListenerShape | undefined
       try {
-        if (l?.subscription?.unsubscribe) l.subscription.unsubscribe()
-        else if (l?.unsubscribe) l.unsubscribe()
-      } catch (e) {
-        // ignore cleanup errors
-      }
+        // listener may be in different shapes across supabase versions - use a small union type
+        type ListenerWithUnsub = { unsubscribe?: () => void } | { subscription?: { unsubscribe?: () => void } }
+        const l = listener as unknown as ListenerWithUnsub | null
+        if (!l) return
+        if (typeof (l as { unsubscribe?: unknown }).unsubscribe === 'function') {
+          ;(l as { unsubscribe?: () => void }).unsubscribe!()
+          return
+        }
+        if ((l as { subscription?: { unsubscribe?: unknown } }).subscription && typeof (l as { subscription?: { unsubscribe?: unknown } }).subscription!.unsubscribe === 'function') {
+          ;(l as { subscription?: { unsubscribe?: () => void } }).subscription!.unsubscribe!()
+        }
+      } catch (e) { /* ignore */ }
     }
   }, [navigate, location.pathname, location.search, location.hash])
 
   return null
 }
+
+function ScrollToTopOnRoute() {
+  const location = useLocation()
+  useEffect(() => {
+    // always scroll to top on route change
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  }, [location.pathname, location.search, location.hash])
+
+  useEffect(() => {
+    // if user clicks a link to the same href, ensure we scroll to top
+    const onDocClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el) return
+      const a = el.closest('a') as HTMLAnchorElement | null
+      if (!a || !a.href) return
+      try {
+        const url = new URL(a.href)
+        if (url.pathname === window.location.pathname && url.search === window.location.search) {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+      } catch (err) { /* ignore */ }
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
+
+  return null
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <BrowserRouter>
+          <AuthWatcher />
+          <ScrollToTopOnRoute />
+          {/* Quick actions floating removed per design: vertical quick-action nav was deleted */}
+          <TooltipProvider>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/shop" element={<Shop />} />
+              <Route path="/product/:id" element={<ProductDetail />} />
+              <Route path="/lookbook" element={<Lookbook />} />
+              <Route path="/collections" element={<Collections />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+              <Route path="/new" element={<NewPage />} />
+
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+              <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
+              <Route path="/admin/products/add" element={<RequireAdmin><AddProduct /></RequireAdmin>} />
+              <Route path="/admin/products/new" element={<RequireAdmin><AddProduct /></RequireAdmin>} />
+              <Route path="/admin/products/:id/edit" element={<RequireAdmin><EditProduct /></RequireAdmin>} />
+              <Route path="/admin/products/:id" element={<RequireAdmin><ViewProduct /></RequireAdmin>} />
+              <Route path="/admin/orders" element={<RequireAdmin><AdminOrders /></RequireAdmin>} />
+              <Route path="/admin/calendar" element={<RequireAdmin><AdminCalendar /></RequireAdmin>} />
+              <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
+              <Route path="/orders" element={<RequireAuth><Orders /></RequireAuth>} />
+              <Route path="/recently-viewed" element={<RequireAuth><RecentlyViewed /></RequireAuth>} />
+              <Route path="/wishlist" element={<RequireAuth><WishlistPage /></RequireAuth>} />
+              <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+              <Route path="/policies" element={<Policies />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="/feedback" element={<Feedback />} />
+              <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/reviews" element={<Reviews />} />
+              <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </TooltipProvider>
+          <Toaster />
+          <Sonner />
+        </BrowserRouter>
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+

@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Instagram, Twitter, Facebook } from 'lucide-react';
 
@@ -17,27 +17,27 @@ export const Footer = () => {
               authentic artisanal craftsmanship.
             </p>
             <div className="flex space-x-4">
-              <Button
+              <IconButton
                 variant="ghost"
                 size="icon"
                 className="text-mink hover:text-accent-color hover:bg-transparent"
               >
                 <Instagram className="h-5 w-5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
                 size="icon"
                 className="text-mink hover:text-accent-color hover:bg-transparent"
               >
                 <Twitter className="h-5 w-5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
                 size="icon"
                 className="text-mink hover:text-accent-color hover:bg-transparent"
               >
                 <Facebook className="h-5 w-5" />
-              </Button>
+              </IconButton>
             </div>
           </div>
 

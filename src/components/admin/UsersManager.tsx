@@ -20,7 +20,14 @@ export const UsersManager: React.FC = () => {
     setError(null)
     try {
       const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-      const resp = await fetch('/api/admin/users', { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      // DEV-friendly dev-bypass header
+      if (import.meta.env && import.meta.env.DEV && !token) {
+  if (String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true') headers['X-ADMIN'] = '1'
+        headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+      }
+      const resp = await fetch('/api/admin/users', { headers })
       if (!resp.ok) throw new Error('Failed to fetch users')
       const data = await resp.json()
       const rawUsers = Array.isArray(data?.users) ? data.users : []
@@ -45,7 +52,13 @@ export const UsersManager: React.FC = () => {
   const makeAdmin = async (id: number) => {
     try {
       const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-      const resp = await fetch(`/api/admin/users/${id}/make-admin`, { method: 'POST', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+      const headers: Record<string,string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (import.meta.env && import.meta.env.DEV && !token) {
+  if (String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true') headers['X-ADMIN'] = '1'
+        headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+      }
+      const resp = await fetch(`/api/admin/users/${id}/make-admin`, { method: 'POST', headers })
       if (!resp.ok) throw new Error('Failed to promote')
       await fetchUsers()
     } catch (e: unknown) {
@@ -57,7 +70,13 @@ export const UsersManager: React.FC = () => {
   const revokeAdmin = async (id: number) => {
     try {
       const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-      const resp = await fetch(`/api/admin/users/${id}/revoke-admin`, { method: 'POST', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+      const headers2: Record<string,string> = {}
+      if (token) headers2['Authorization'] = `Bearer ${token}`
+      if (import.meta.env && import.meta.env.DEV && !token) {
+  if (String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true') headers2['X-ADMIN'] = '1'
+        headers2['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+      }
+      const resp = await fetch(`/api/admin/users/${id}/revoke-admin`, { method: 'POST', headers: headers2 })
       if (!resp.ok) throw new Error('Failed to revoke')
       await fetchUsers()
     } catch (e: unknown) {

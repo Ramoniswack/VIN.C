@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from '@/lib/supabaseClient'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 
 export default function AdminLogin() {
@@ -44,7 +44,21 @@ export default function AdminLogin() {
         token = localStorage.getItem('supabase_access_token') ?? null
       }
 
-      const resp = await fetch('/api/admin/emails', { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+      const buildHeaders = () => {
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+        try {
+          const t = token ?? (localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? null)
+          if (t) headers.Authorization = `Bearer ${t}`
+          const isDev = Boolean(import.meta.env && (import.meta.env.DEV as boolean))
+          const devAuthEnabled = Boolean(import.meta.env && String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true')
+          if (isDev && devAuthEnabled) headers['X-ADMIN'] = '1'
+          if (username) headers['X-USER-EMAIL'] = String(username).trim().toLowerCase()
+          else if (isDev) headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+        } catch (e) { /* ignore */ }
+        return headers
+      }
+
+      const resp = await fetch('/api/admin/emails', { headers: buildHeaders() })
       const data = await resp.json()
       const emails: string[] = (data?.emails || []).map((s: string) => s.toLowerCase())
       // Fallback to env-configured admin emails (useful in dev/local .env)
@@ -64,7 +78,9 @@ export default function AdminLogin() {
       // In local/dev, ensure the backend has an Admin record so protected endpoints work.
       try {
         if (import.meta.env.DEV) {
-          await fetch('/api/admin/emails', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ADMIN-EDIT': '1' }, body: JSON.stringify({ email: username }) })
+          const headers = buildHeaders()
+          headers['X-ADMIN-EDIT'] = '1'
+          await fetch('/api/admin/emails', { method: 'POST', headers, body: JSON.stringify({ email: username }) })
         }
       } catch (e) {
         // ignore

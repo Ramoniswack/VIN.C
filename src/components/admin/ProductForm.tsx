@@ -30,6 +30,8 @@ interface ProductFormProps {
   product?: Product;
   onSubmit: (data: Partial<Product> & { mainImageFile?: File, additionalImageFiles?: File[] }) => void;
   isSubmitting: boolean;
+  onToggleInStock?: (next?: boolean) => Promise<void>;
+  onToggleIsNew?: (next?: boolean) => Promise<void>;
 }
 
 type ProductFormValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'rating' | 'reviews'>;
@@ -41,7 +43,9 @@ const CATEGORIES: ProductCategory[] = ['Blazers', 'Trousers', 'Shirts', 'Outerwe
 export const ProductForm = ({ 
   product, 
   onSubmit,
-  isSubmitting
+  isSubmitting,
+  onToggleInStock,
+  onToggleIsNew
 }: ProductFormProps) => {
   const navigate = useNavigate();
   const isEditing = !!product;
@@ -349,11 +353,28 @@ export const ProductForm = ({
                       name="inStock"
                       control={control}
                       render={({ field }) => (
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          id="in-stock"
-                        />
+                        <div className="flex items-center space-x-2">
+                          {/* Render the classic quick-action button here instead of a Switch */}
+                          {typeof (onToggleInStock) === 'function' ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const next = !field.value
+                                  field.onChange(next)
+                                  await onToggleInStock(next)
+                                } catch (e) {
+                                  // parent will show toasts
+                                }
+                              }}
+                              className="text-sm text-graphite underline"
+                            >
+                              {field.value ? 'Mark Out' : 'Mark In'}
+                            </button>
+                          ) : (
+                            <span className="text-sm text-graphite">{field.value ? 'In Stock' : 'Out of Stock'}</span>
+                          )}
+                        </div>
                       )}
                     />
                   </div>
@@ -366,11 +387,28 @@ export const ProductForm = ({
                       name="isNew"
                       control={control}
                       render={({ field }) => (
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          id="is-new"
-                        />
+                        <div className="flex items-center space-x-2">
+                          {/* Classic quick-action button for Mark as New */}
+                          {typeof (onToggleIsNew) === 'function' ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const next = !field.value
+                                  field.onChange(next)
+                                  await onToggleIsNew(next)
+                                } catch (e) {
+                                  // parent will show toasts
+                                }
+                              }}
+                              className="text-sm text-graphite underline"
+                            >
+                              {field.value ? 'Unset New' : 'Set New'}
+                            </button>
+                          ) : (
+                            <span className="text-sm text-graphite">{field.value ? 'New' : 'Not New'}</span>
+                          )}
+                        </div>
                       )}
                     />
                   </div>

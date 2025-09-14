@@ -1,16 +1,18 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Settings, LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog'
 import { Dashboard } from "@/components/admin/Dashboard";
 import { ProductManager } from "@/components/admin/ProductManager";
 import { UsersManager } from "@/components/admin/UsersManager";
+import OrdersManager from '@/components/admin/OrdersManager'
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -88,14 +90,22 @@ export default function AdminDashboard() {
               <h1 className="text-4xl font-display font-medium text-paper">Admin Dashboard</h1>
               <p className="text-graphite mt-1">Welcome back, {user?.username || 'Admin'}</p>
             </div>
-            
-            <Button 
-              variant="outline" 
-              className="border-graphite/30"
-              onClick={() => setConfirmOpen(true)}
-            >
-              Logout
-            </Button>
+            <div className="flex items-center">
+              <div className="hidden md:flex flex-col items-center space-y-2">
+                {/* Settings above Logout - icon-only controls */}
+                <Link to="/admin?tab=settings"><IconButton variant="ghost" size="icon" ariaLabel="Settings"><Settings className="w-4 h-4" /></IconButton></Link>
+                <IconButton variant="ghost" size="icon" ariaLabel="Logout" onClick={() => setConfirmOpen(true)}><LogOut className="w-4 h-4" /></IconButton>
+              </div>
+                <div className="md:hidden flex items-center space-x-2">
+                  {/* On small screens show Settings and Logout icon-only buttons next to the heading */}
+                  <Link to="/admin?tab=settings" className="flex items-center justify-center">
+                    <IconButton variant="ghost" size="icon" ariaLabel="Settings"><Settings className="w-4 h-4" /></IconButton>
+                  </Link>
+                  <button onClick={() => { setConfirmOpen(true); (document.activeElement as HTMLElement)?.blur(); }} aria-label="Sign out">
+                    <IconButton variant="ghost" size="icon" ariaLabel="Logout"><LogOut className="w-4 h-4" /></IconButton>
+                  </button>
+                </div>
+            </div>
           </div>
           
           {/* Success Alert */}
@@ -130,12 +140,7 @@ export default function AdminDashboard() {
               >
                 Orders
               </TabsTrigger>
-              <TabsTrigger 
-                value="settings" 
-                className="data-[state=active]:text-accent data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none"
-              >
-                Settings
-              </TabsTrigger>
+              
               <TabsTrigger 
                 value="users" 
                 className="data-[state=active]:text-accent data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none"
@@ -148,16 +153,8 @@ export default function AdminDashboard() {
               {activeTab === "dashboard" && <Dashboard />}
               {activeTab === "products" && <ProductManager />}
               {activeTab === "users" && <UsersManager />}
-              {activeTab === "orders" && (
-                <div className="rounded-md border border-graphite/30 p-8 text-center text-graphite">
-                  <p>Order management will be available soon.</p>
-                </div>
-              )}
-              {activeTab === "settings" && (
-                <div className="rounded-md border border-graphite/30 p-8 text-center text-graphite">
-                  <p>Settings will be available soon.</p>
-                </div>
-              )}
+              {activeTab === "orders" && <OrdersManager />}
+              
             </div>
           </Tabs>
         </div>

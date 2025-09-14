@@ -1,13 +1,14 @@
 import { useState, useMemo } from "react";
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Filter, Search, ShoppingBag, Heart, Star } from "lucide-react";
 import { useProductStore, Product as StoreProduct, ProductSize, ProductColor, ProductCategory } from "@/store/productStore";
+import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { useCartStore } from '@/store/cartStore'
 import { useWishlistStore } from '@/store/wishlistStore'
@@ -51,21 +52,77 @@ export default function Shop() {
   const [sortBy, setSortBy] = useState("featured");
   
   // Get products from store
-  const { products: storeProducts } = useProductStore();
+  const { products: storeProducts, loadProducts, visibleCount, loadMore, resetPagination } = useProductStore();
+
+  useEffect(() => {
+    loadProducts().catch(() => null)
+  }, [loadProducts])
+
+  // reset pagination when filters/search change
+  useEffect(() => {
+    resetPagination()
+  }, [searchQuery, selectedFilters, sortBy, resetPagination])
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = document.getElementById('product-list-sentinel')
+    if (!sentinel) return
+    const obs = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          loadMore()
+        }
+      }
+    }, { rootMargin: '200px' })
+    obs.observe(sentinel)
+    return () => obs.disconnect()
+  }, [loadMore, visibleCount])
+
+  // Debounced server-side search: when user types, query backend and store matching ids on window
+  useEffect(() => {
+    let t: any = null
+    if (!searchQuery || String(searchQuery).trim() === '') {
+      ;(window as any).__serverSearchResults = undefined
+      return
+    }
+    t = setTimeout(async () => {
+      try {
+        const q = encodeURIComponent(String(searchQuery).trim())
+        const resp = await fetch(`/api/products/search?q=${q}`)
+        if (!resp.ok) return
+        const data = await resp.json()
+        if (!Array.isArray(data)) return
+        ;(window as any).__serverSearchResults = data.map((p: any) => Number(p.id))
+      } catch (e) {
+        ;(window as any).__serverSearchResults = undefined
+      }
+    }, 250)
+    return () => { if (t) clearTimeout(t) }
+  }, [searchQuery])
   
   // Filter and sort products based on search query, filters, and sort option
   const filteredProducts = useMemo(() => {
     // Start with all products from the store
     let filtered = [...storeProducts];
     
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(query) || 
-        product.description?.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query)
-      );
+    // Normalize search query: trim and collapse whitespace, lowercase
+    const normQuery = (searchQuery || '').trim().replace(/\s+/g, ' ').toLowerCase()
+    // Apply search filter (if we have serverSearchResults they'll already be filtered)
+    if (normQuery) {
+      // When a search query exists, prefer the serverSearchResults (populated in an effect below)
+      // If serverSearchResults is empty, still fall back to client-side filtering so UX isn't blocked.
+      const serverResults = (window as any).__serverSearchResults as number[] | undefined
+      if (serverResults && Array.isArray(serverResults) && serverResults.length > 0) {
+        filtered = filtered.filter(p => serverResults.includes(p.id))
+      } else {
+        filtered = filtered.filter(product => {
+          const name = (product.name || '').toLowerCase().replace(/\s+/g, ' ')
+          const desc = (product.description || '').toLowerCase().replace(/\s+/g, ' ')
+          const cat = (product.category || '').toLowerCase().replace(/\s+/g, ' ')
+          const sku = (product.sku || '').toLowerCase().replace(/\s+/g, ' ')
+          return name.includes(normQuery) || desc.includes(normQuery) || cat.includes(normQuery) || sku.includes(normQuery)
+        })
+      }
     }
     
     // Apply selected filters
@@ -123,6 +180,9 @@ export default function Shop() {
     
     return filtered;
   }, [storeProducts, searchQuery, selectedFilters, sortBy]);
+
+  // visible slice for pagination
+  const visibleProducts = useMemo(() => filteredProducts.slice(0, visibleCount), [filteredProducts, visibleCount]);
   
   const toggleFilter = (category: string, value: string) => {
     setSelectedFilters(prev => ({
@@ -177,7 +237,7 @@ export default function Shop() {
 
   const ProductCard = ({ product }: { product: Product }) => (
     <Card 
-      className="group cursor-pointer border-graphite/20 bg-transparent hover:border-accent/30 transition-all duration-300 hover:shadow-lg hover:shadow-graphite/10"
+      className="group cursor-pointer rounded-lg overflow-hidden border-graphite/20 bg-transparent hover:border-accent/30 transition-all duration-300 hover:shadow-lg hover:shadow-graphite/10"
       onClick={() => window.location.href = `/product/${product.id}`}
     >
       <CardContent className="p-0 relative">
@@ -306,7 +366,37 @@ export default function Shop() {
         // try remove on server
         try {
           const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-          if (token) await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+          const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          else if (import.meta.env && import.meta.env.DEV) {
+            const devAuthEnabled = String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true'
+            if (devAuthEnabled) {
+              headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+              if (String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true') headers['X-ADMIN'] = '1'
+            }
+          }
+          const resp = await fetch('/api/wishlist', { method: 'DELETE', headers, body: JSON.stringify({ productId: product.id }) })
+          if (!resp.ok) {
+            try { const json = await resp.json(); console.warn('Wishlist DELETE failed', resp.status, json) } catch { console.warn('Wishlist DELETE failed', resp.status) }
+          }
+          // refresh server wishlist and merge
+          try {
+            const fetchResp = await fetch('/api/wishlist', { headers })
+            if (fetchResp.ok) {
+              const j = await fetchResp.json()
+              const items = Array.isArray(j.items) ? j.items : []
+              // merge server items with local
+              const local = useWishlistStore.getState().items || []
+              const serverMap = new Map<number | string, any>()
+              for (const it of items) serverMap.set(Number(it.product?.id ?? it.productId ?? it.id ?? 0), it)
+              for (const l of local) {
+                const pid = Number(l.productId ?? l.id)
+                if (!serverMap.has(pid)) serverMap.set(pid, l)
+              }
+              const merged = Array.from(serverMap.values()).map((v: any) => ({ id: v.id ?? v.productId ?? v.product?.id ?? 0, productId: v.productId ?? v.product?.id, title: v.product?.title ?? v.title ?? '', image: v.product?.images?.[0] ?? v.image ?? '' }))
+              useWishlistStore.getState().setItems(merged)
+            }
+          } catch (e) { console.debug('fetch wishlist after delete failed', e) }
         } catch (e) { console.debug('wishlist delete failed', e) }
         try { sonner('Removed from wishlist', { description: `${product.name} removed from your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
       } else {
@@ -315,20 +405,49 @@ export default function Shop() {
         // try add on server
         try {
           const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-          if (token) await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+          const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          else if (import.meta.env && import.meta.env.DEV) {
+            const devAuthEnabled = String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true'
+            if (devAuthEnabled) {
+              headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+              headers['X-ADMIN'] = '1'
+            }
+          }
+          const resp = await fetch('/api/wishlist', { method: 'POST', headers, body: JSON.stringify({ productId: product.id }) })
+          if (!resp.ok) {
+            try { const json = await resp.json(); console.warn('Wishlist POST failed', resp.status, json) } catch { console.warn('Wishlist POST failed', resp.status) }
+          }
+          // refresh server wishlist and merge
+          try {
+            const fetchResp = await fetch('/api/wishlist', { headers })
+            if (fetchResp.ok) {
+              const j = await fetchResp.json()
+              const items = Array.isArray(j.items) ? j.items : []
+              const local = useWishlistStore.getState().items || []
+              const serverMap = new Map<number | string, any>()
+              for (const it of items) serverMap.set(Number(it.product?.id ?? it.productId ?? it.id ?? 0), it)
+              for (const l of local) {
+                const pid = Number(l.productId ?? l.id)
+                if (!serverMap.has(pid)) serverMap.set(pid, l)
+              }
+              const merged = Array.from(serverMap.values()).map((v: any) => ({ id: v.id ?? v.productId ?? v.product?.id ?? 0, productId: v.productId ?? v.product?.id, title: v.product?.title ?? v.title ?? '', image: v.product?.images?.[0] ?? v.image ?? '' }))
+              useWishlistStore.getState().setItems(merged)
+            }
+          } catch (e) { console.debug('fetch wishlist after post failed', e) }
         } catch (e) { console.debug('wishlist add failed', e) }
         try { sonner('Added to wishlist', { description: `${product.name} added to your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
       }
     }
     return (
-      <Button
+      <IconButton
         variant="ghost"
         size="icon"
         onClick={handle}
         className="absolute top-3 right-3 z-10 h-8 w-8 bg-bg/80 backdrop-blur-sm hover:bg-bg text-graphite hover:text-accent opacity-0 group-hover:opacity-100 transition-all duration-300"
       >
         <Heart className={`h-4 w-4 ${isInWishlist ? 'fill-current text-accent' : ''}`} />
-      </Button>
+      </IconButton>
     )
   }
 
@@ -478,8 +597,8 @@ export default function Shop() {
           {/* Product Grid */}
           <div className="flex-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => (
+              {visibleProducts.length > 0 ? (
+                visibleProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))
               ) : (
@@ -499,14 +618,26 @@ export default function Shop() {
               )}
             </div>
             
-            {/* Load More / Pagination could go here */}
-            {filteredProducts.length > 0 && (
-              <div className="flex justify-center mt-12">
-                <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50">
-                  Load More Products
-                </Button>
-              </div>
-            )}
+            {/* Infinite scroll sentinel - uses store.visibleCount and server total to know if more exists */}
+            <div>
+              {typeof (window as any).__productStoreTotal === 'number' ? (
+                (window as any).__productStoreTotal > visibleCount && (
+                  <div id="product-list-sentinel" className="flex justify-center mt-12">
+                    <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50" onClick={() => loadMore()}>
+                      Load More Products
+                    </Button>
+                  </div>
+                )
+              ) : (
+                filteredProducts.length > visibleCount && (
+                  <div id="product-list-sentinel" className="flex justify-center mt-12">
+                    <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50" onClick={() => loadMore()}>
+                      Load More Products
+                    </Button>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         </div>
       </main>

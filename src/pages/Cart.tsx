@@ -1,11 +1,12 @@
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from '@/components/ui/button';
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Minus, Plus, X, ShoppingBag, ArrowRight } from "lucide-react";
 import { toast as sonner } from '@/components/ui/sonner'
 import { useCartStore } from "@/store/cartStore";
+import { useAuthStore } from '@/store/authStore'
 import { useState } from 'react'
 
 export default function Cart() {
@@ -53,7 +54,30 @@ export default function Cart() {
         cancelUrl: `${window.location.origin}/cart`,
         customerEmail: undefined
       }
-      const resp = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      // Build headers: include Authorization when available, or dev-bypass headers in dev
+      const buildHeaders = () => {
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+        try {
+          const sToken = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          if (sToken) headers.Authorization = `Bearer ${sToken}`
+          const isDev = Boolean(import.meta.env && (import.meta.env.DEV as boolean))
+          const devAuthEnabled = Boolean(import.meta.env && String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true')
+          if (isDev && devAuthEnabled) {
+            headers['X-ADMIN'] = '1'
+            const username = useAuthStore.getState().user?.username ? String(useAuthStore.getState().user!.username).trim().toLowerCase() : undefined
+            headers['X-USER-EMAIL'] = username ?? ((import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string)
+          }
+        } catch (e) { /* ignore */ }
+        return headers
+      }
+
+      // include customerEmail when available so server can associate order with user
+      try {
+        const user = useAuthStore.getState().user
+        if (user && user.username) payload.customerEmail = String(user.username).trim().toLowerCase()
+      } catch (e) { /* ignore */ }
+
+      const resp = await fetch('/api/stripe/checkout', { method: 'POST', headers: buildHeaders(), body: JSON.stringify(payload) })
       const body = await resp.json()
       if (!resp.ok) throw new Error(body?.error || 'checkout failed')
       // redirect to hosted url if provided, otherwise fallback to Stripe checkout url pattern
@@ -116,7 +140,7 @@ export default function Cart() {
                               <p className="text-xs text-graphite">SKU: {item.variant.sku}</p>
                             )}
                           </div>
-                          <Button
+                          <IconButton
                             variant="ghost"
                             size="icon"
                             onClick={() => {
@@ -126,29 +150,29 @@ export default function Cart() {
                             className="text-graphite hover:text-paper"
                           >
                             <X className="w-4 h-4" />
-                          </Button>
+                          </IconButton>
                           
                         </div>
                         
                         <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-2">
-                            <Button
+                            <IconButton
                               variant="outline"
                               size="icon"
                               className="w-8 h-8"
                               onClick={() => updateQuantity(item.id, item.variant, Math.max(0, item.quantity - 1))}
                             >
                               <Minus className="w-3 h-3" />
-                            </Button>
+                            </IconButton>
                             <span className="text-paper w-8 text-center">{item.quantity}</span>
-                            <Button
+                            <IconButton
                               variant="outline"
                               size="icon"
                               className="w-8 h-8"
                               onClick={() => updateQuantity(item.id, item.variant, item.quantity + 1)}
                             >
                               <Plus className="w-3 h-3" />
-                            </Button>
+                            </IconButton>
                           </div>
                           
                           <div className="text-right">

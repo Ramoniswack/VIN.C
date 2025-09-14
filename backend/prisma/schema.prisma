@@ -21,6 +21,8 @@ model Product {
   description String?
   price       Int
   images      String[] @default([])
+  colors      String[] @default([])
+  sizes       String[] @default([])
   category    String?
   inStock     Boolean  @default(true)
   wishlistItems WishlistItem[]

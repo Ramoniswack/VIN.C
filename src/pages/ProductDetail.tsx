@@ -1,16 +1,42 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Minus, Plus, Heart, Share2, Truck, RotateCcw, Shield } from "lucide-react";
+import { Minus, Plus, Heart, Share2, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useWishlistStore } from '@/store/wishlistStore'
 import { useAuthStore } from '@/store/authStore'
 import { useProductStore, Product } from "@/store/productStore";
 import { toast as sonner } from '@/components/ui/sonner'
+
+// Helper utilities to safely work with unknown server payloads (avoid 'any')
+const asRecord = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null) ? v as Record<string, unknown> : {};
+const extractId = (item: unknown): number => {
+  const o = asRecord(item);
+  const prod = asRecord(o['product']);
+  const pid = prod['id'] ?? o['productId'] ?? o['id'];
+  if (typeof pid === 'number') return pid;
+  if (typeof pid === 'string' && pid.trim() !== '') return Number(pid);
+  return 0;
+};
+const toWishlistItem = (v: unknown) => {
+  const o = asRecord(v);
+  const prod = asRecord(o['product']);
+              try { window.dispatchEvent(new CustomEvent('vinc:data-changed')) } catch (e) { /* ignore */ }
+  const id = extractId(v);
+  const productId = (() => {
+    const pid = prod['id'] ?? o['productId'] ?? o['id'];
+    if (typeof pid === 'number') return pid;
+    if (typeof pid === 'string' && pid.trim() !== '') return Number(pid);
+    return undefined;
+  })();
+  const title = (typeof prod['title'] === 'string') ? prod['title'] as string : (typeof o['title'] === 'string' ? o['title'] as string : '');
+  const image = (Array.isArray(prod['images']) && typeof prod['images'][0] === 'string') ? (prod['images'][0] as string) : (typeof o['image'] === 'string' ? o['image'] as string : '');
+  return { id, productId, title, image };
+};
 
 export default function ProductDetail() {
   const { id: productId } = useParams<{ id: string }>();
@@ -32,17 +58,51 @@ export default function ProductDetail() {
   // Get product from store
   const product = getProduct(Number(productId));
   
-  // Get related products (same category but different product)
-  const relatedProducts = products
-    .filter(p => p.id !== Number(productId) && p.category === product?.category)
-    .slice(0, 3);
+  // Get related products: prefer complementary categories (not same category)
+  const complementaryMap: Record<string, string[]> = {
+    Shirts: ['Trousers', 'Outerwear'],
+    Trousers: ['Shirts', 'Outerwear'],
+    Outerwear: ['Shirts', 'Trousers'],
+    Blazers: ['Trousers', 'Shirts', 'Outerwear'],
+    Accessories: ['Shirts', 'Trousers', 'Outerwear', 'Sets'],
+    Sets: ['Trousers', 'Outerwear', 'Shirts']
+  };
+
+  const getRelatedProducts = () => {
+    if (!product) return [] as Product[];
+    const preferred = complementaryMap[product.category] ?? [];
+    // first try to get products from preferred complementary categories
+    let picks = products.filter(p => p.id !== product.id && preferred.includes(p.category));
+    // if not enough, fill with other categories excluding the same category
+    if (picks.length < 3) {
+      const filler = products.filter(p => p.id !== product.id && p.category !== product.category && !picks.includes(p));
+      picks = picks.concat(filler);
+    }
+    return picks.slice(0, 3);
+  };
+
+  const relatedProducts = getRelatedProducts();
     
   // Set default color when product loads
   useEffect(() => {
-    if (product && product.colors.length > 0) {
-      setSelectedColor(product.colors[0]);
+    if (product) {
+      if (product.colors && product.colors.length > 0) setSelectedColor(product.colors[0]);
+      // If product has no colors or sizes defined, set defaults so Add to Cart is enabled
+      if ((!product.colors || product.colors.length === 0)) setSelectedColor(null)
+      if ((!product.sizes || product.sizes.length === 0)) setSelectedSize('')
     }
   }, [product]);
+
+  // Image carousel helpers
+  const totalImages = 1 + (product?.additionalImages?.length || 0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') setSelectedImage((s) => (s + 1) % totalImages);
+      if (e.key === 'ArrowLeft') setSelectedImage((s) => (s - 1 + totalImages) % totalImages);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [totalImages]);
   
   // Redirect if product not found
   useEffect(() => {
@@ -69,8 +129,10 @@ export default function ProductDetail() {
   const selectedVariant = selectedColor && selectedSize ? 
     variants.find(v => v.color === selectedColor && v.size === selectedSize) : 
     undefined;
-    
-  const isInStock = selectedVariant ? product.inStock && selectedVariant.inventory > 0 : false;
+
+  // If product has no variants defined (no colors & no sizes), allow adding to cart
+  const hasVariants = (product.colors && product.colors.length > 0) || (product.sizes && product.sizes.length > 0)
+  const isInStock = hasVariants ? (selectedVariant ? product.inStock && selectedVariant.inventory > 0 : false) : product.inStock;
   
   const availableSizes = selectedColor ?
     variants
@@ -85,20 +147,63 @@ export default function ProductDetail() {
       navigate(`/auth?next=${next}`)
       return
     }
-    if (selectedVariant && isInStock && selectedColor) {
-      addToCart({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        image: product.image,
-        variant: {
-          size: selectedSize,
-          color: selectedColor,
-          sku: selectedVariant.sku
-        },
-        quantity
-      });
-  try { sonner('Added to cart', { description: `${product.name} added to your cart.` }) } catch (e) { console.debug('toast failed', e) }
+    // allow adding when variantless product is in stock, or when a variant is selected
+    if ((hasVariants && selectedVariant && isInStock && selectedColor) || (!hasVariants && isInStock)) {
+      // Try to persist to server first, then hydrate local store from server
+      (async () => {
+        try {
+          // build headers (support dev fallback like other pages)
+          const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+          const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          else if (import.meta.env && import.meta.env.DEV) {
+            const devAuthEnabled = String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true'
+            // include dev email header so backend dev-bypass accepts the request only when explicitly enabled
+            if (devAuthEnabled) {
+              headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+              headers['X-ADMIN'] = '1'
+            }
+          }
+
+          const rawVariantObj = { size: selectedSize || undefined, color: selectedColor || undefined, sku: selectedVariant?.sku }
+          // If variant has no meaningful keys (all undefined), send null so backend stores null instead of '{}'
+          const hasVariant = Object.values(rawVariantObj).some(v => v !== undefined && v !== null)
+          const body = { productId: product.id, quantity, variant: hasVariant ? JSON.stringify(rawVariantObj) : null }
+          const resp = await fetch('/api/cart', { method: 'POST', headers, body: JSON.stringify(body) })
+          if (!resp.ok) {
+            // fallback to local-only add when server not available
+            addToCart({ id: product.id, name: product.name, price: product.price, image: product.image, variant: { size: selectedSize, color: selectedColor, sku: selectedVariant?.sku }, quantity })
+            try { sonner('Added to cart', { description: `${product.name} added to your cart (local).` }) } catch (e) { console.debug('toast failed', e) }
+            return
+          }
+
+          // if server accepted the add, fetch authoritative cart and hydrate (do not also do an optimistic local add)
+          try {
+            const fetchResp = await fetch('/api/cart', { headers })
+            if (fetchResp.ok) {
+              const j = await fetchResp.json()
+              const items = Array.isArray(j.items) ? j.items : []
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mapped = items.map((c: any) => ({
+                id: Number((c.product && c.product.id) || c.productId || c.id),
+                name: (c.product && (c.product.title || '')) || '',
+                price: Number(((c.product && c.product.price) || 0) as number) / 100,
+                image: (c.product && Array.isArray(c.product.images) ? c.product.images[0] : '') || '',
+                variant: c.variant ? (typeof c.variant === 'string' ? (() => { try { return JSON.parse(c.variant) } catch { return undefined } })() : c.variant) : undefined,
+                quantity: Number(c.quantity || 1)
+              }))
+              try { useCartStore.getState().setItems(mapped) } catch (e) { /* ignore */ }
+            }
+          } catch (e) { console.debug('refresh cart after add failed', e) }
+
+          try { sonner('Added to cart', { description: `${product.name} added to your cart.` }) } catch (e) { console.debug('toast failed', e) }
+        } catch (e) {
+          // network or unexpected error: fall back to local store for resiliency
+          console.debug('add to cart failed, falling back to local', e)
+          addToCart({ id: product.id, name: product.name, price: product.price, image: product.image, variant: { size: selectedSize, color: selectedColor, sku: selectedVariant?.sku }, quantity })
+          try { sonner('Added to cart', { description: `${product.name} added to your cart (local).` }) } catch (e) { console.debug('toast failed', e) }
+        }
+      })()
     }
   };
 
@@ -110,7 +215,7 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Product Images */}
           <div className="space-y-4">
-            <div className="aspect-[4/5] overflow-hidden bg-mink/10">
+            <div className="aspect-[4/5] overflow-hidden bg-mink/10 relative">
               {/* Show main image or first additional image based on selectedImage */}
               <img
                 src={selectedImage === 0 ? 
@@ -122,6 +227,17 @@ export default function ProductDetail() {
                 alt={product.name}
                 className="w-full h-full object-cover"
               />
+                {/* Prev/Next arrows */}
+                {totalImages > 1 && (
+                  <>
+                    <IconButton aria-label="Previous image" onClick={(e: React.MouseEvent) => { e.stopPropagation(); prevImage(); }} className="absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-bg/70 text-paper rounded-full p-2 hover:bg-bg/90 transition-colors">
+                      <ChevronLeft className="w-4 h-4" />
+                    </IconButton>
+                    <IconButton aria-label="Next image" onClick={(e: React.MouseEvent) => { e.stopPropagation(); nextImage(); }} className="absolute right-3 top-1/2 -translate-y-1/2 z-20 bg-bg/70 text-paper rounded-full p-2 hover:bg-bg/90 transition-colors">
+                      <ChevronRight className="w-4 h-4" />
+                    </IconButton>
+                  </>
+                )}
             </div>
             <div className="grid grid-cols-4 gap-2">
               {/* Main image + additional images */}
@@ -178,22 +294,26 @@ export default function ProductDetail() {
             <div>
               <h3 className="text-sm font-medium text-paper mb-3">Color</h3>
               <div className="flex space-x-3">
-                {product.colors.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      setSelectedColor(color);
-                      setSelectedSize(""); // Reset size when color changes
-                    }}
-                    className={`px-4 py-2 border rounded-md transition-colors ${
-                      selectedColor === color
-                        ? 'border-accent text-accent'
-                        : 'border-graphite/30 text-paper hover:border-accent/50'
-                    }`}
-                  >
-                    {color}
-                  </button>
-                ))}
+                {product.colors && product.colors.length > 0 ? (
+                  product.colors.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => {
+                        setSelectedColor(color);
+                        setSelectedSize(""); // Reset size when color changes
+                      }}
+                      className={`px-4 py-2 border rounded-md transition-colors ${
+                        selectedColor === color
+                          ? 'border-accent text-accent'
+                          : 'border-graphite/30 text-paper hover:border-accent/50'
+                      }`}
+                    >
+                      {color}
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-sm text-graphite">Default color</div>
+                )}
               </div>
             </div>
 
@@ -201,26 +321,30 @@ export default function ProductDetail() {
             <div>
               <h3 className="text-sm font-medium text-paper mb-3">Size</h3>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((size) => {
-                  const isAvailable = availableSizes.includes(size);
-                  return (
-                    <button
-                      key={size}
-                      onClick={() => isAvailable && setSelectedSize(size)}
-                      disabled={!isAvailable}
-                      className={`px-4 py-2 border rounded-md transition-colors ${
-                        selectedSize === size
-                          ? 'border-accent text-accent'
-                          : isAvailable
-                          ? 'border-graphite/30 text-paper hover:border-accent/50'
-                          : 'border-graphite/10 text-graphite/50 cursor-not-allowed'
-                      }`}
-                    >
-                      {size}
-                      {!isAvailable && <span className="ml-1 text-xs">(Out)</span>}
-                    </button>
-                  );
-                })}
+                {product.sizes && product.sizes.length > 0 ? (
+                  product.sizes.map((size) => {
+                    const isAvailable = availableSizes.includes(size);
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => isAvailable && setSelectedSize(size)}
+                        disabled={!isAvailable}
+                        className={`px-4 py-2 border rounded-md transition-colors ${
+                          selectedSize === size
+                            ? 'border-accent text-accent'
+                            : isAvailable
+                            ? 'border-graphite/30 text-paper hover:border-accent/50'
+                            : 'border-graphite/10 text-graphite/50 cursor-not-allowed'
+                        }`}
+                      >
+                        {size}
+                        {!isAvailable && <span className="ml-1 text-xs">(Out)</span>}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="text-sm text-graphite">One size</div>
+                )}
               </div>
             </div>
 
@@ -252,10 +376,10 @@ export default function ProductDetail() {
             <div className="space-y-3">
               <Button
                 onClick={handleAddToCart}
-                disabled={!selectedSize || !isInStock}
+                disabled={hasVariants ? (!selectedSize || !isInStock) : !isInStock}
                 className="w-full h-12 text-base"
               >
-                {!selectedSize ? 'Select Size' : !isInStock ? 'Out of Stock' : 'Add to Cart'}
+                {hasVariants ? (!selectedSize ? 'Select Size' : !isInStock ? 'Out of Stock' : 'Add to Cart') : (!isInStock ? 'Out of Stock' : 'Add to Cart')}
               </Button>
               <div className="flex space-x-3">
                 <Button
@@ -271,7 +395,79 @@ export default function ProductDetail() {
                       removeWishlist(String(product.id))
                       try {
                         const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-                        if (token) await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+                        const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+                        if (token) headers['Authorization'] = `Bearer ${token}`
+                        else if (import.meta.env && import.meta.env.DEV) {
+                          // dev fallback headers so backend.requireAuth will accept the request
+                          headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+                          headers['X-ADMIN'] = '1'
+                        }
+                        const resp = await fetch('/api/wishlist', { method: 'DELETE', headers, body: JSON.stringify({ productId: product.id }) })
+                        if (!resp.ok) {
+                          try { const json = await resp.json(); console.warn('Wishlist DELETE failed', resp.status, json) } catch { console.warn('Wishlist DELETE failed', resp.status) }
+                        }
+                        try {
+                          const fetchResp = await fetch('/api/wishlist', { headers })
+                          if (fetchResp.ok) {
+                            const j = await fetchResp.json()
+                            const items = Array.isArray(j.items) ? j.items : []
+                            const local = useWishlistStore.getState().items || []
+                            // helpers to safely extract fields from unknown server payloads
+                            const extractId = (item: unknown): number => {
+                              if (typeof item !== 'object' || item === null) return 0;
+                              const o = item as Record<string, unknown>;
+                              const prod = o['product'];
+                              if (prod && typeof prod === 'object' && prod !== null) {
+                                const pid = (prod as Record<string, unknown>)['id'];
+                                if (typeof pid === 'number' || typeof pid === 'string') return Number(pid);
+                              }
+                              const pid2 = o['productId'] ?? o['id'];
+                              if (typeof pid2 === 'number' || typeof pid2 === 'string') return Number(pid2);
+                              return 0;
+                            };
+
+                            const toWishlistItem = (v: unknown) => {
+                              const o = (typeof v === 'object' && v !== null) ? v as Record<string, unknown> : {} as Record<string, unknown>;
+                              const prod = o['product'];
+                              const id = extractId(v);
+                              const productId = (() => {
+                                if (prod && typeof prod === 'object' && prod !== null) {
+                                  const pid = (prod as Record<string, unknown>)['id'];
+                                  if (typeof pid === 'number' || typeof pid === 'string') return Number(pid);
+                                }
+                                const pid2 = o['productId'] ?? o['id'];
+                                if (typeof pid2 === 'number' || typeof pid2 === 'string') return Number(pid2);
+                                return undefined;
+                              })();
+                              const title = (() => {
+                                if (prod && typeof prod === 'object' && prod !== null) {
+                                  const t = (prod as Record<string, unknown>)['title'];
+                                  if (typeof t === 'string') return t;
+                                }
+                                const t2 = o['title'];
+                                return typeof t2 === 'string' ? t2 : '';
+                              })();
+                              const image = (() => {
+                                if (prod && typeof prod === 'object' && prod !== null) {
+                                  const imgs = (prod as Record<string, unknown>)['images'];
+                                  if (Array.isArray(imgs) && imgs.length > 0 && typeof imgs[0] === 'string') return imgs[0];
+                                }
+                                const img = o['image'];
+                                return typeof img === 'string' ? img : '';
+                              })();
+                              return { id, productId, title, image };
+                            };
+
+                            const serverMap = new Map<number | string, unknown>();
+                            for (const it of items) serverMap.set(extractId(it), it as unknown);
+                            for (const l of local) {
+                              const pid = extractId(l);
+                              if (!serverMap.has(pid)) serverMap.set(pid, l as unknown);
+                            }
+                            const merged = Array.from(serverMap.values()).map(toWishlistItem);
+                            useWishlistStore.getState().setItems(merged)
+                          }
+                        } catch (e) { console.debug('fetch wishlist after delete failed', e) }
                       } catch (e) { /* ignore */ }
                       setIsWishlisted(false)
                       try { sonner('Removed from wishlist', { description: `${product.name} removed from your wishlist.` }) } catch (e) { console.debug('toast failed', e) }
@@ -279,7 +475,31 @@ export default function ProductDetail() {
                       addWishlist({ id: String(product.id), productId: product.id, title: product.name, image: product.image })
                       try {
                         const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
-                        if (token) await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id }) })
+                        const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+                        if (token) headers['Authorization'] = `Bearer ${token}`
+                        else if (import.meta.env && import.meta.env.DEV) {
+                          headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+                        }
+                        const resp = await fetch('/api/wishlist', { method: 'POST', headers, body: JSON.stringify({ productId: product.id }) })
+                        if (!resp.ok) {
+                          try { const json = await resp.json(); console.warn('Wishlist POST failed', resp.status, json) } catch { console.warn('Wishlist POST failed', resp.status) }
+                        }
+                        try {
+                          const fetchResp = await fetch('/api/wishlist', { headers })
+                          if (fetchResp.ok) {
+                            const j = await fetchResp.json()
+                            const items = Array.isArray(j.items) ? j.items : []
+                            const local = useWishlistStore.getState().items || []
+                            const serverMap = new Map<number | string, unknown>()
+                            for (const it of items) serverMap.set(extractId(it), it as unknown)
+                            for (const l of local) {
+                              const pid = extractId(l)
+                              if (!serverMap.has(pid)) serverMap.set(pid, l as unknown)
+                            }
+                            const merged = Array.from(serverMap.values()).map(toWishlistItem)
+                            useWishlistStore.getState().setItems(merged)
+                          }
+                        } catch (e) { console.debug('fetch wishlist after post failed', e) }
                       } catch (e) { /* ignore */ }
                       setIsWishlisted(true)
                       try { sonner('Added to wishlist', { description: `${product.name} added to your wishlist.` }) } catch (e) { console.debug('toast failed', e) }

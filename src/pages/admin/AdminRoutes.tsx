@@ -1,7 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import AddProduct from "./AddProduct";
 import EditProduct from "./EditProduct";
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 
 export default function AdminRoutes() {

@@ -35,33 +35,7 @@ const defaultStats = [
   { title: 'Customers', value: '0', change: '+0%', trend: 'up', icon: Users },
 ]
 
-// Top selling products
-const topSellingProducts = [
-  {
-    name: "Regal Combo Set",
-    category: "Sets",
-    sales: 142,
-    revenue: "$343,780",
-  },
-  {
-    name: "White Jacket",
-    category: "Outerwear",
-    sales: 98,
-    revenue: "$117,600",
-  },
-  {
-    name: "Mocca Shirt",
-    category: "Shirts",
-    sales: 87,
-    revenue: "$56,550",
-  },
-  {
-    name: "Zenkage Jacket",
-    category: "Outerwear",
-    sales: 54,
-    revenue: "$97,200",
-  },
-];
+type TopSelling = { name: string; category: string; sales: number; revenue: string }
 
 // Recent orders
 const recentOrders = [
@@ -108,6 +82,7 @@ type ReceivedOrder = { id?: number; email?: string | null; createdAt?: string | 
 export const Dashboard = () => {
   const [stats, setStats] = useState(defaultStats)
   const [recentOrdersState, setRecentOrdersState] = useState<RecentOrder[]>(recentOrders as RecentOrder[])
+  const [topSellingState, setTopSellingState] = useState<TopSelling[]>([])
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -115,20 +90,28 @@ export const Dashboard = () => {
         const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (token) headers.Authorization = `Bearer ${token}`
-        const resp = await fetch('/api/admin/orders', { headers })
-        if (!resp.ok) throw new Error('no admin orders')
+        const resp = await fetch('/api/admin/dashboard', { headers })
+        if (!resp.ok) {
+          // if unauthorized or no data, keep defaults
+          return
+        }
         const json = await resp.json()
         if (json?.ok) {
           const totalRevenue = Number(json.stats.totalRevenue) || 0
           const totalOrders = Number(json.stats.totalOrders) || 0
+          const productsCount = Number(json.stats.productsCount || 0)
+          const customersCount = Number(json.stats.customersCount || 0)
           setStats([
-            { title: 'Total Revenue', value: `$${(totalRevenue/100).toLocaleString()}`, change: '+0%', trend: 'up', icon: DollarSign },
+            { title: 'Total Revenue', value: totalRevenue > 0 ? `$${(totalRevenue/100).toLocaleString()}` : '$0', change: '+0%', trend: totalRevenue >= 0 ? 'up' : 'down', icon: DollarSign },
             { title: 'Total Orders', value: `${totalOrders}`, change: '+0%', trend: 'up', icon: ShoppingCart },
-            { title: 'Products', value: '—', change: '+0', trend: 'up', icon: Package },
-            { title: 'Customers', value: '—', change: '+0%', trend: 'up', icon: Users },
+            { title: 'Products', value: `${productsCount}`, change: '+0', trend: 'up', icon: Package },
+            { title: 'Customers', value: `${customersCount}`, change: '+0%', trend: 'up', icon: Users },
           ])
-          const received = (json.recent as ReceivedOrder[]) || []
+          const received = (json.recentOrders as ReceivedOrder[]) || []
           setRecentOrdersState(received.map((r) => ({ id: `#${r.id}`, customer: r.email ?? '—', date: new Date(r.createdAt || Date.now()).toLocaleDateString(), status: r.status ?? '—', total: `$${((r.amountTotal||0)/100).toFixed(2) }` })))
+          // top selling
+          const rawTop = (json.topSelling || []) as Array<{ name?: string; category?: string | null; units?: number; revenue?: number }>
+          setTopSellingState(rawTop.map((p) => ({ name: p.name || '—', category: p.category || '—', sales: p.units || 0, revenue: `$${((p.revenue||0)/100).toLocaleString()}` })))
         }
       } catch (e) {
         // keep defaults
@@ -183,15 +166,19 @@ export const Dashboard = () => {
           </CardHeader>
           <CardContent className="px-4 py-2 md:px-6 md:py-4">
             <div className="space-y-4 md:space-y-5">
-              {topSellingProducts.map((product, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <div className="space-y-1">
-                    <p className="font-medium text-paper text-sm md:text-base">{product.name}</p>
-                    <span className="text-xs text-graphite">{product.category} • {product.sales} units</span>
+              {topSellingState.length === 0 ? (
+                <div className="text-graphite text-sm">No sales data yet.</div>
+              ) : (
+                topSellingState.map((product, index) => (
+                  <div key={index} className="flex justify-between items-center">
+                    <div className="space-y-1">
+                      <p className="font-medium text-paper text-sm md:text-base">{product.name}</p>
+                      <span className="text-xs text-graphite">{product.category} • {product.sales} units</span>
+                    </div>
+                    <span className="font-medium text-paper text-sm md:text-base">{product.revenue}</span>
                   </div>
-                  <span className="font-medium text-paper text-sm md:text-base">{product.revenue}</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
           <CardFooter className="border-t border-graphite/20 pt-4 px-4 md:px-6">
@@ -286,56 +273,8 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-        <Button 
-          variant="outline" 
-          className="h-auto p-3 md:p-6 border-graphite/30 hover:border-accent/40 flex flex-col items-center justify-center space-y-1 md:space-y-2 bg-transparent"
-          asChild
-        >
-          <Link to="/admin/products/new">
-            <Package className="h-6 w-6 md:h-8 md:w-8 text-accent mb-1 md:mb-2" />
-            <span className="text-paper font-medium text-sm md:text-base">Add Product</span>
-            <span className="text-graphite text-xs hidden sm:block">Create new product listing</span>
-          </Link>
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          className="h-auto p-3 md:p-6 border-graphite/30 hover:border-accent/40 flex flex-col items-center justify-center space-y-1 md:space-y-2 bg-transparent"
-          asChild
-        >
-          <Link to="/admin/orders">
-            <ClipboardList className="h-6 w-6 md:h-8 md:w-8 text-accent mb-1 md:mb-2" />
-            <span className="text-paper font-medium text-sm md:text-base">Manage Orders</span>
-            <span className="text-graphite text-xs hidden sm:block">View and update orders</span>
-          </Link>
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          className="h-auto p-3 md:p-6 border-graphite/30 hover:border-accent/40 flex flex-col items-center justify-center space-y-1 md:space-y-2 bg-transparent"
-          asChild
-        >
-          <Link to="/admin/calendar">
-            <Calendar className="h-6 w-6 md:h-8 md:w-8 text-accent mb-1 md:mb-2" />
-            <span className="text-paper font-medium text-sm md:text-base">Calendar</span>
-            <span className="text-graphite text-xs hidden sm:block">Schedule and events</span>
-          </Link>
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          className="h-auto p-3 md:p-6 border-graphite/30 hover:border-accent/40 flex flex-col items-center justify-center space-y-1 md:space-y-2 bg-transparent"
-          asChild
-        >
-          <Link to="/admin/settings">
-            <Settings className="h-6 w-6 md:h-8 md:w-8 text-accent mb-1 md:mb-2" />
-            <span className="text-paper font-medium text-sm md:text-base">Settings</span>
-            <span className="text-graphite text-xs hidden sm:block">Manage preferences</span>
-          </Link>
-        </Button>
-      </div>
+      {/* Quick Actions removed: use the admin tabs (Products / Orders / Calendar / Settings / Users) instead */}
     </div>
   );
 };
+

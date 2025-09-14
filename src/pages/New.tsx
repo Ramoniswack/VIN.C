@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation } from '@/components/Navigation';
+import Navigation from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,19 +12,74 @@ import { useProductStore } from '@/store/productStore';
 
 const NewPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('featured');
+  // Default to newest arrivals first
+  const [sortBy, setSortBy] = useState('newest');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const { products: storeProducts } = useProductStore();
+  const loadProducts = useProductStore(state => state.loadProducts)
+  const visibleCount = useProductStore(state => state.visibleCount)
+  const loadMore = useProductStore(state => state.loadMore)
+  const resetPagination = useProductStore(state => state.resetPagination)
 
-  // only show new products by default
-  const newProducts = storeProducts.filter(p => p.isNew || p.isFeatured).slice();
+  React.useEffect(() => {
+    loadProducts?.().catch(() => null)
+  }, [loadProducts])
 
+  React.useEffect(() => {
+    resetPagination()
+  }, [searchQuery, sortBy, selectedFilters, resetPagination])
+
+  // IntersectionObserver for infinite scroll
+  React.useEffect(() => {
+    const sentinel = document.getElementById('new-products-sentinel')
+    if (!sentinel) return
+    const obs = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) loadMore()
+      }
+    }, { rootMargin: '200px' })
+    obs.observe(sentinel)
+    return () => obs.disconnect()
+  }, [loadMore, visibleCount])
+
+  // Debounced server-side search for New page as well
+  React.useEffect(() => {
+    let t: any = null
+    if (!searchQuery || String(searchQuery).trim() === '') {
+      ;(window as any).__serverSearchResults = undefined
+      return
+    }
+    t = setTimeout(async () => {
+      try {
+        const q = encodeURIComponent(String(searchQuery).trim())
+        const resp = await fetch(`/api/products/search?q=${q}`)
+        if (!resp.ok) return
+        const data = await resp.json()
+        if (!Array.isArray(data)) return
+        ;(window as any).__serverSearchResults = data.map((p: any) => Number(p.id))
+      } catch (e) {
+        ;(window as any).__serverSearchResults = undefined
+      }
+    }, 250)
+    return () => { if (t) clearTimeout(t) }
+  }, [searchQuery])
+
+  // only show new products by default, sorted newest first
+  const newProducts = storeProducts.filter(p => p.isNew || p.isFeatured).slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const visibleProducts = newProducts.slice(0, visibleCount)
+
+  // normalize search and filter
   const filteredProducts = useMemo(() => {
     let filtered = newProducts.slice();
-    // search
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
+    const normQuery = (searchQuery || '').trim().replace(/\s+/g, ' ').toLowerCase()
+    if (normQuery) {
+      filtered = filtered.filter(p => {
+        const name = (p.name || '').toLowerCase().replace(/\s+/g, ' ')
+        const desc = (p.description || '').toLowerCase().replace(/\s+/g, ' ')
+        const cat = (p.category || '').toLowerCase().replace(/\s+/g, ' ')
+        const sku = (p.sku || '')?.toLowerCase().replace(/\s+/g, ' ')
+        return name.includes(normQuery) || desc.includes(normQuery) || cat.includes(normQuery) || sku.includes(normQuery)
+      })
     }
 
     // apply selectedFilters (size, color, category, price)
@@ -130,16 +185,16 @@ const NewPage: React.FC = () => {
   );
 
   const ProductCard = ({ product }: any) => (
-    <Card className="group cursor-pointer border-graphite/20 bg-transparent hover:border-accent/30 transition-all duration-300 hover:shadow-lg hover:shadow-graphite/10" onClick={() => window.location.href = `/product/${product.id}`}>
+    <Card className="group cursor-pointer rounded-lg overflow-hidden border-graphite/20 bg-transparent hover:border-accent/30 transition-all duration-300 hover:shadow-lg hover:shadow-graphite/10" onClick={() => window.location.href = `/product/${product.id}`}>
       <CardContent className="p-0 relative">
         <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
           {product.isNew && (<Badge className="bg-accent text-ink font-medium text-xs px-2 py-1">NEW</Badge>)}
           {product.compareAt && (<Badge variant="destructive" className="bg-red-600 text-white font-medium text-xs px-2 py-1">SALE</Badge>)}
         </div>
 
-        <Button variant="ghost" size="icon" className="absolute top-3 right-3 z-10 h-8 w-8 bg-bg/80 backdrop-blur-sm hover:bg-bg text-graphite hover:text-accent opacity-0 group-hover:opacity-100 transition-all duration-300">
+        <IconButton variant="ghost" size="icon" className="absolute top-3 right-3 z-10 h-8 w-8 bg-bg/80 backdrop-blur-sm hover:bg-bg text-graphite hover:text-accent opacity-0 group-hover:opacity-100 transition-all duration-300">
           <Heart className="h-4 w-4" />
-        </Button>
+        </IconButton>
 
         <div className="aspect-[4/5] overflow-hidden bg-mink/10 relative">
           <img src={product.image.startsWith('/') ? product.image : `/${product.image}`} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
@@ -283,8 +338,8 @@ const NewPage: React.FC = () => {
 
           <div className="flex-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => <ProductCard key={product.id} product={product} />)
+              {visibleProducts.length > 0 ? (
+                visibleProducts.map((product) => <ProductCard key={product.id} product={product} />)
               ) : (
                 <div className="col-span-full py-12 text-center">
                   <div className="text-graphite text-xl mb-4">No new products found</div>
@@ -293,11 +348,21 @@ const NewPage: React.FC = () => {
               )}
             </div>
 
-            {filteredProducts.length > 0 && (
-              <div className="flex justify-center mt-12">
-                <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50">Load More Products</Button>
-              </div>
-            )}
+            <div>
+              {typeof (window as any).__productStoreTotal === 'number' ? (
+                (window as any).__productStoreTotal > visibleCount && (
+                  <div id="new-products-sentinel" className="flex justify-center mt-12">
+                    <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50" onClick={() => loadMore()}>Load More Products</Button>
+                  </div>
+                )
+              ) : (
+                filteredProducts.length > visibleCount && (
+                  <div id="new-products-sentinel" className="flex justify-center mt-12">
+                    <Button variant="outline" className="px-8 py-3 border-graphite/30 hover:border-accent/50" onClick={() => loadMore()}>Load More Products</Button>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         </div>
       </main>

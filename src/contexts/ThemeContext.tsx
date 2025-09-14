@@ -1,27 +1,32 @@
-import React, { createContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState, ReactNode } from 'react'
 
-export type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark'
 
 export interface ThemeContextType {
-  theme: Theme;
-  toggleTheme: () => void;
+  theme: Theme
+  toggleTheme: () => void
 }
 
-export const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 interface ThemeProviderProps {
-  children: React.ReactNode;
+  children: ReactNode
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   const [theme, setTheme] = useState<Theme>(() => {
     // Check localStorage first, then system preference
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      return savedTheme;
+    try {
+      const savedTheme = typeof localStorage !== 'undefined' ? (localStorage.getItem('theme') as Theme | null) : null
+      if (savedTheme) return savedTheme
+    } catch (e) {
+      // ignore access errors
     }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+    try {
+      if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark'
+    } catch (e) { /* ignore */ }
+    return 'light'
+  })
 
   useEffect(() => {
     const root = window.document.documentElement;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Navigation } from "@/components/Navigation";
+import Navigation from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { gsap } from 'gsap';
@@ -196,24 +196,24 @@ export default function Lookbook() {
       {/* Full-Screen Story Modal */}
       {selectedStory && currentStory && (
         <div className="fixed inset-0 bg-bg z-50 flex items-center justify-center">
-          <Button
+          <IconButton
             onClick={closeStory}
             variant="ghost"
             size="icon"
             className="absolute top-6 right-6 z-10 text-paper hover:text-accent"
           >
             <X className="w-6 h-6" />
-          </Button>
+          </IconButton>
 
           <div className="flex items-center justify-center w-full h-full relative">
-            <Button
+            <IconButton
               onClick={prevImage}
               variant="ghost"
               size="icon"
               className="absolute left-6 z-10 text-paper hover:text-accent"
             >
               <ChevronLeft className="w-8 h-8" />
-            </Button>
+            </IconButton>
 
             <div className="max-w-4xl max-h-[90vh] flex flex-col items-center">
               <div className="aspect-[4/5] max-h-[80vh] overflow-hidden">
@@ -244,14 +244,14 @@ export default function Lookbook() {
               </div>
             </div>
 
-            <Button
+            <IconButton
               onClick={nextImage}
               variant="ghost"
               size="icon"
               className="absolute right-6 z-10 text-paper hover:text-accent"
             >
               <ChevronRight className="w-8 h-8" />
-            </Button>
+            </IconButton>
           </div>
         </div>
       )}

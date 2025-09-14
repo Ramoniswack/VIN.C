@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from 'sonner';
 import { useProductStore, Product } from "@/store/productStore";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   DropdownMenu,
@@ -51,21 +52,32 @@ import {
 } from "@/components/ui/select";
 
 export const ProductManager = () => {
-  const { products, deleteProduct, updateProduct } = useProductStore();
+  const { products, deleteProduct, updateProduct, loadProducts, page, pageSize, total } = useProductStore();
+  const itemsPerPage = pageSize || 10;
+  // Ensure we sync with server on mount so admin actions operate on real server records
+  // (avoids operating on the local seeded products stored in localStorage)
+  useEffect(() => {
+    (async () => {
+      try {
+        await loadProducts(1, itemsPerPage)
+      } catch (e) {
+        // ignore load errors - admin UI will still function with local data
+        console.warn('failed to load products on admin mount', e)
+      }
+    })()
+  }, [loadProducts, itemsPerPage])
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [sortBy, setSortBy] = useState<string>("newest");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<number | null>(null);
   const navigate = useNavigate();
   
-  const itemsPerPage = 10;
-  
   // Get unique categories from products
   const categories = Array.from(new Set(products.map(product => product.category)));
   
-  // Filter and sort products
+  // Filter and sort products (client-side filtering applied to the current page set)
   const filteredProducts = products
     .filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,36 +104,55 @@ export const ProductManager = () => {
       }
     });
   
-  // Pagination
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // For admin, rely on server-side pagination: products contains the current page slice
+  const totalPages = total ? Math.ceil((total || 0) / itemsPerPage) : 1;
+  const paginatedProducts = filteredProducts; // store.products already holds the current page
   
   const handleEditProduct = (id: number) => {
-    navigate(`/admin/products/edit/${id}`);
+  navigate(`/admin/products/${id}/edit`);
   };
   
   const handleDeleteClick = (id: number) => {
     setProductToDelete(id);
     setIsDeleteDialogOpen(true);
   };
+
+  // Reload when page or itemsPerPage changes
+  useEffect(() => {
+    (async () => {
+      try {
+        await loadProducts(currentPage, itemsPerPage)
+      } catch (e) {
+        console.warn('failed to load products for page', currentPage, e)
+      }
+    })()
+  }, [loadProducts, currentPage, itemsPerPage])
   
   const confirmDelete = () => {
     if (productToDelete) {
-      deleteProduct(productToDelete);
-      setIsDeleteDialogOpen(false);
-      setProductToDelete(null);
+      (async () => {
+        try {
+          await deleteProduct(productToDelete);
+          toast.success('Product deleted')
+        } catch (e) {
+          console.error('delete failed', e)
+        }
+        setIsDeleteDialogOpen(false);
+        setProductToDelete(null);
+      })()
     }
   };
   
   const handleToggleStatus = (id: number, inStock: boolean) => {
-    updateProduct(id, { inStock: !inStock });
+    (async () => {
+      try { await updateProduct(id, { inStock: !inStock }) } catch (e) { console.error('update failed', e) }
+    })()
   };
   
   const handleToggleFeatured = (id: number, isFeatured: boolean) => {
-    updateProduct(id, { isFeatured: !isFeatured });
+    (async () => {
+      try { await updateProduct(id, { isFeatured: !isFeatured }) } catch (e) { console.error('update failed', e) }
+    })()
   };
   
   return (
@@ -239,33 +270,33 @@ export const ProductManager = () => {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-7 w-7 rounded-full ${
-                      product.isFeatured ? "text-yellow-500" : "text-graphite"
-                    }`}
-                    onClick={() => handleToggleFeatured(product.id, product.isFeatured)}
-                  >
-                    {product.isFeatured ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <Ban className="h-4 w-4" />
-                    )}
-                  </Button>
+                  <IconButton
+                      variant="ghost"
+                      size="icon"
+                      className={`h-7 w-7 rounded-full ${
+                        product.isFeatured ? "text-yellow-500" : "text-graphite"
+                      }`}
+                      onClick={() => handleToggleFeatured(product.id, product.isFeatured)}
+                    >
+                      {product.isFeatured ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Ban className="h-4 w-4" />
+                      )}
+                    </IconButton>
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-graphite hover:text-paper">
+                      <DropdownMenuTrigger asChild>
+                      <IconButton variant="ghost" size="icon" className="h-8 w-8 text-graphite hover:text-paper">
                         <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
                       <DropdownMenuItem 
                         className="cursor-pointer"
-                        onClick={() => navigate(`/admin/products/view/${product.id}`)}
+                        onClick={() => navigate(`/admin/products/${product.id}`)}
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         <span>View</span>
@@ -347,7 +378,7 @@ export const ProductManager = () => {
                   {product.inStock ? "In Stock" : "Out of Stock"}
                 </Badge>
                 
-                <Button
+                <IconButton
                   variant="ghost"
                   size="icon"
                   className={`h-7 w-7 rounded-full ${
@@ -360,7 +391,7 @@ export const ProductManager = () => {
                   ) : (
                     <Ban className="h-4 w-4" />
                   )}
-                </Button>
+                </IconButton>
               </div>
               
               <div className="flex items-center space-x-1">
@@ -368,7 +399,7 @@ export const ProductManager = () => {
                   variant="ghost" 
                   size="sm" 
                   className="h-8 text-graphite hover:text-paper"
-                  onClick={() => navigate(`/admin/products/view/${product.id}`)}
+                  onClick={() => navigate(`/admin/products/${product.id}`)}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>

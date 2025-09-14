@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigation } from '@/components/Navigation';
+import Navigation from '@/components/Navigation';
 import { Hero } from '@/components/Hero';
 import { Marquee } from '@/components/Marquee';
 import { FeaturedCollections } from '@/components/FeaturedCollections';
@@ -9,6 +9,11 @@ import { useProductStore } from '@/store/productStore';
 const Index = () => {
   // Keep index lightweight; avoid global GSAP to reduce initial JS work
   const products = useProductStore(state => state.products);
+  const loadProducts = useProductStore(state => state.loadProducts)
+
+  useEffect(() => {
+    loadProducts?.().catch(() => null)
+  }, [loadProducts])
   const [filter, setFilter] = useState<'all' | 'new' | 'trending'>('all');
 
   const filteredProducts = products.filter(p => {

@@ -60,7 +60,7 @@ const ViewProduct = () => {
         <Button 
           variant="outline"
           className="border-accent text-accent hover:bg-accent hover:text-ink" 
-          onClick={() => navigate(`/admin/products/edit/${id}`)}
+          onClick={() => navigate(`/admin/products/${id}/edit`)}
         >
           <Pencil className="h-4 w-4 mr-2" />
           Edit Product
@@ -378,7 +378,7 @@ const ViewProduct = () => {
                   <Button
                     variant="outline"
                     className="border-accent text-accent hover:bg-accent hover:text-ink" 
-                    onClick={() => navigate(`/admin/products/edit/${id}`)}
+                    onClick={() => navigate(`/admin/products/${id}/edit`)}
                   >
                     <Pencil className="h-4 w-4 mr-2" />
                     Edit Product

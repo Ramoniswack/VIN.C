@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Navigation } from '@/components/Navigation';
+import Navigation from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabaseClient';
@@ -49,6 +49,20 @@ export default function Auth() {
       .catch((e) => console.error(e))
   };
 
+  const buildHeaders = useCallback((overrideEmail?: string) => {
+    const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+    try {
+      const token = localStorage.getItem('supabase_access_token') ?? sessionStorage.getItem('supabase_access_token') ?? ''
+      if (token) headers.Authorization = `Bearer ${token}`
+      const isDev = Boolean(import.meta.env && (import.meta.env.DEV as boolean))
+      const devAuthEnabled = Boolean(import.meta.env && String(import.meta.env.VITE_DEV_AUTH_ENABLED) === 'true')
+      if (isDev && devAuthEnabled) headers['X-ADMIN'] = '1'
+      if (overrideEmail) headers['X-USER-EMAIL'] = String(overrideEmail).trim().toLowerCase()
+      else if (isDev) headers['X-USER-EMAIL'] = (import.meta.env.VITE_DEV_USER_EMAIL || 'dev@example.com') as string
+    } catch (e) { /* ignore */ }
+    return headers
+  }, [])
+
   // Remove oauthPending: we will auto-finalize OAuth
 
   // demo admin login removed - use real admin accounts managed via backend
@@ -85,7 +99,6 @@ export default function Auth() {
           try {
             const res = await client.auth.setSession({ access_token: token, refresh_token: refresh ?? '' })
             // v2 returns { data, error }
-            // @ts-expect-error - supabase response typing may vary by version
             setErr = res?.error
             console.debug('setSession result', res)
           } catch (e) {
@@ -132,7 +145,7 @@ export default function Auth() {
               .filter(Boolean)
             const fetchAdminList = async (): Promise<string[]> => {
               try {
-                const resp = await fetch('/api/admin/emails')
+                const resp = await fetch('/api/admin/emails', { headers: buildHeaders(email) })
                 if (!resp.ok) throw new Error('no admin API')
                 const json = await resp.json()
                 const server = (json.emails || []).map((s: string) => s.toLowerCase())
@@ -209,7 +222,7 @@ export default function Auth() {
       }
     }
     handle()
-  }, [navigate])
+  }, [navigate, buildHeaders])
 
 
 
@@ -227,7 +240,7 @@ export default function Auth() {
             .filter(Boolean)
           const fetchAdminList = async (): Promise<string[]> => {
               try {
-                const resp = await fetch('/api/admin/emails')
+                const resp = await fetch('/api/admin/emails', { headers: buildHeaders(email) })
                 if (!resp.ok) throw new Error('no admin API')
                 const json = await resp.json()
                 const server = (json.emails || []).map((s: string) => s.toLowerCase())
@@ -264,100 +277,80 @@ export default function Auth() {
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       <Navigation />
-      <main className="flex-1 flex items-center justify-center px-4 py-16">
-        <Card className="w-full max-w-3xl rounded-lg shadow-lg overflow-hidden">
-          <CardHeader className="text-center px-8 pt-8">
-            <CardTitle className="text-3xl font-display">{mode === 'login' ? 'Welcome back' : 'Create your account'}</CardTitle>
-            <p className="text-sm text-graphite mt-2">Create an account to save favorites, manage orders, and checkout faster.</p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="flex-1 px-8 py-6">
-                <div className="space-y-5 mb-6">
-                  <Button
-                    className="w-full bg-white border flex items-center justify-center space-x-3 rounded-lg py-3 transition-none hover:!bg-white hover:!text-black shadow-sm"
-                    onClick={() => handleSocial('google')}
-                    aria-label={mode === 'login' ? 'Login with Google' : 'Sign up with Google'}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                      <path fill="#EA4335" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l6-5.8C34.9 4.1 30.8 2.5 24 2.5 14.8 2.5 7.2 7.9 4.1 15.6l7.4 5.7C12.2 15.1 17.6 9.5 24 9.5z"/>
-                      <path fill="#34A853" d="M46.5 24.5c0-1.6-.1-2.9-.4-4.2H24v7.9h12.7c-.5 2.7-2 4.9-4.2 6.4l6.5 5c3.8-3.5 6-8.8 6-15.1z"/>
-                      <path fill="#4A90E2" d="M11.5 29.3c-.8-2.4-1.2-4.6-1.2-7.3s.4-4.9 1.2-7.3L4 9.1C1.5 13.5 0 18.4 0 24c0 5.6 1.5 10.5 4 14.9l7.5-9.6z"/>
-                      <path fill="#FBBC05" d="M24 46.5c6.8 0 12.5-2.2 16.7-5.9L34.2 35.6C31.9 37 28.3 38 24 38c-7.2 0-13.2-4.6-15.4-11.1l-7.5 9.6C7.2 40.6 14.8 46.5 24 46.5z"/>
-                    </svg>
-                    <span className="text-black font-semibold">{mode === 'login' ? 'Login with Google' : 'Sign up with Google'}</span>
-                  </Button>
-                  {/* Removed Facebook social login as requested */}
-                </div>
-                <div className="text-center text-sm text-graphite mb-4">Or use your email</div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {mode === 'signup' && (
-                    <div>
-                      <Label htmlFor="name">Full name</Label>
-                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className="rounded-md" />
-                    </div>
-                  )}
+      <main className="flex-1 flex items-center justify-center px-4 py-20 min-h-[calc(100vh-6rem)]">
+        <div className="w-full max-w-md mx-auto">
+          {/* Auth form panel centered */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-8 shadow-lg ring-1 ring-black/5 dark:ring-white/5">
+            <div className="mb-6">
+              <h3 style={{ fontFamily: 'Playfair Display, serif' }} className="text-2xl text-black dark:text-white text-center">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300 text-center">{mode === 'login' ? 'Sign in to access your dashboard, wishlist and faster checkout.' : 'Join VIN.C to save favorites, track orders and enjoy special drops.'}</p>
+            </div>
+
+            <div className="space-y-5">
+              <Button
+                className="w-full group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center space-x-3 rounded-lg py-3 transition-shadow shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-gray-800"
+                onClick={() => handleSocial('google')}
+                aria-label={mode === 'login' ? 'Login with Google' : 'Sign up with Google'}
+              >
+                <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path fill="#EA4335" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l6-5.8C34.9 4.1 30.8 2.5 24 2.5 14.8 2.5 7.2 7.9 4.1 15.6l7.4 5.7C12.2 15.1 17.6 9.5 24 9.5z"/>
+                  <path fill="#34A853" d="M46.5 24.5c0-1.6-.1-2.9-.4-4.2H24v7.9h12.7c-.5 2.7-2 4.9-4.2 6.4l6.5 5c3.8-3.5 6-8.8 6-15.1z"/>
+                  <path fill="#4A90E2" d="M11.5 29.3c-.8-2.4-1.2-4.6-1.2-7.3s.4-4.9 1.2-7.3L4 9.1C1.5 13.5 0 18.4 0 24c0 5.6 1.5 10.5 4 14.9l7.5-9.6z"/>
+                  <path fill="#FBBC05" d="M24 46.5c6.8 0 12.5-2.2 16.7-5.9L34.2 35.6C31.9 37 28.3 38 24 38c-7.2 0-13.2-4.6-15.4-11.1l-7.5 9.6C7.2 40.6 14.8 46.5 24 46.5z"/>
+                </svg>
+                <span className="text-black dark:text-white font-semibold">{mode === 'login' ? 'Continue with Google' : 'Sign up with Google'}</span>
+              </Button>
+
+              <div className="text-center text-sm text-gray-500 dark:text-gray-400">Or use your email</div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === 'signup' && (
                   <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@domain.com" className="rounded-md" />
+                    <Label htmlFor="name" className="text-sm text-gray-700 dark:text-gray-200">Full name</Label>
+                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-black dark:text-white" />
                   </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="rounded-md pr-10" />
-                      <button type="button" className="absolute right-2 top-2 text-sm text-graphite" onClick={() => setShowPassword(s => !s)} aria-label="Toggle password visibility">
-                        {showPassword ? 'Hide' : 'Show'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input id="remember" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                    <Label htmlFor="remember" className="mb-0">Remember me</Label>
-                  </div>
-                  {error && <div className="text-red-600">{error}</div>}
-                  <Button type="submit" className="w-full bg-accent text-ink rounded-lg py-3">{mode === 'login' ? 'Login' : 'Sign up'}</Button>
-                </form>
-
-
-                {/* OAuth debug UI removed for production-ready login form */}
-
-                {/* Dev auth panel removed to prevent demo admin access; use real admin accounts via backend */}
-              </div>
-              <aside className="w-full md:w-96 bg-surface/60 border-l px-6 py-6 hidden md:block">
-                <div className="mb-4">
-                  <div className="w-full h-40 bg-gradient-to-br from-accent/10 to-accent/5 rounded-md flex items-center justify-center p-4">
-                    <div className="flex items-center space-x-4">
-                      <svg className="w-12 h-12 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12 2l7 3v5c0 5-3.58 9.74-7 11-3.42-1.26-7-6-7-11V5l7-3z" fill="currentColor" opacity="0.12"/>
-                        <path d="M12 3.2l6.1 2.6v4.1c0 4.1-2.9 8-6.1 9-3.2-1-6.1-4.9-6.1-9V5.8L12 3.2z" stroke="currentColor" strokeWidth="0.6" fill="none"/>
-                        <path d="M9.2 11.8l1.8 1.8 3.8-3.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                      </svg>
-                      <div>
-                        <h5 className="text-sm font-semibold">Secure & fast checkout</h5>
-                        <p className="text-xs text-graphite mt-1">Payments and account data are protected with industry standards.</p>
-                      </div>
-                    </div>
-                  </div>
+                )}
+                <div>
+                  <Label htmlFor="email" className="text-sm text-gray-700 dark:text-gray-200">Email</Label>
+                  <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@domain.com" className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-black dark:text-white" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-medium">Why create an account?</h4>
-                  <ul className="mt-3 space-y-2 text-sm text-graphite list-disc list-inside">
-                    <li>Save favorites for later</li>
-                    <li>Faster checkout with saved info</li>
-                    <li>Access order history & tracking</li>
-                  </ul>
+                  <Label htmlFor="password" className="text-sm text-gray-700 dark:text-gray-200">Password</Label>
+                  <div className="relative">
+                    <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="rounded-md pr-10 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-black dark:text-white" />
+                    <button type="button" className="absolute right-2 top-2 text-sm text-gray-400 dark:text-gray-300" onClick={() => setShowPassword(s => !s)} aria-label="Toggle password visibility">
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-6">
-                  <p className="text-sm text-graphite">Already have an account?</p>
-                  <Button variant="link" className="mt-2" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Create an account' : 'Login instead'}</Button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <input id="remember" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                    <Label htmlFor="remember" className="mb-0 text-sm text-gray-700 dark:text-gray-200">Remember me</Label>
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Forgot password?</div>
                 </div>
-              </aside>
+                {error && <div className="text-red-600">{error}</div>}
+                <Button type="submit" className="w-full bg-[#D4AF37] hover:bg-[#b88925] text-black rounded-lg py-3 shadow-md">{mode === 'login' ? 'Login' : 'Create account'}</Button>
+
+                {/* Elegant secondary gesture below the CTA */}
+                <div className="mt-4 text-center">
+                  {mode === 'signup' ? (
+                    <button onClick={() => setMode('login')} className="inline-flex items-center text-sm text-black dark:text-white hover:text-black dark:hover:text-white transition-colors">
+                      <span className="mr-2">Already a user?</span>
+                      <span className="text-[#D4AF37] font-medium underline decoration-1 underline-offset-2">Login</span>
+                    </button>
+                  ) : (
+                    <button onClick={() => setMode('signup')} className="inline-flex items-center text-sm text-black dark:text-white hover:text-black dark:hover:text-white transition-colors">
+                      <span className="mr-2">New to VIN.C?</span>
+                      <span className="text-[#D4AF37] font-medium underline decoration-1 underline-offset-2">Create account</span>
+                    </button>
+                  )}
+                </div>
+              </form>
             </div>
-          </CardContent>
-          <CardFooter className="flex justify-center border-t pt-4">
-            <p className="text-sm text-graphite">By continuing you agree to our terms and privacy.</p>
-          </CardFooter>
-        </Card>
+          </div>
+        </div>
       </main>
       <Footer />
     </div>
